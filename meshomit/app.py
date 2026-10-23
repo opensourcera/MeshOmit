@@ -4,6 +4,7 @@ a first-run setup and a stats dashboard."""
 import asyncio
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -45,6 +46,10 @@ Footer { background: #1a1a4a; }
 #repeaters { height: auto; max-height: 9; background: #000000; border: round #2080a0; }
 #events { height: 1fr; background: #000000; border: round #a08020; padding: 0 1; }
 #pin_box { width: 60; height: auto; border: thick #4040a0; background: #101030; padding: 1 2; }
+FieldScreen { align: left bottom; }
+#field_box { width: 70; height: auto; max-height: 16; border: round #C8A2C8; background: #101020; margin: 0 0 2 1; }
+#field_box Label { color: #C8A2C8; padding: 0 1; }
+#fields { height: auto; max-height: 12; background: #101020; }
 #pin_box Label { margin-bottom: 1; }
 
 /* operator mode: lilac */
@@ -261,6 +266,51 @@ class SetupScreen(ModalScreen[dict]):
         cfg["known_prefixes"] = {}
         cfg.pop("_help", None)
         self.dismiss(cfg)
+
+
+FIELDS = [
+    ("name", "the station you address"),
+    ("hops", "hops of its last message"),
+    ("via", "the repeaters it came through"),
+    ("snr", "SNR of its last message, dB"),
+    ("rssi", "RSSI of its last message, dBm"),
+    ("heard", "when its last message was heard"),
+    ("location", "your place (operator_location)"),
+    ("time", "the time now"),
+    ("me", "your node's name"),
+]
+
+
+class FieldScreen(ModalScreen[str]):
+    """The list that opens on `{`: pick a field, it is filled in when the message is sent."""
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, values: dict):
+        super().__init__()
+        self.values = values
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="field_box"):
+            yield Label("Fields, filled in when you send (Enter picks, Escape closes):")
+            lst = OptionList(id="fields")
+            for key, what in FIELDS:
+                t = Text("{%s}" % key, style="bold #FFFF00")
+                t.append("  %-32s" % what, style="#A0A0A0")
+                t.append(" " + str(self.values.get(key, "?"))[:22], style="#80FF80")
+                lst.add_option(Option(t, id=key))
+            yield lst
+
+    def on_mount(self) -> None:
+        lst = self.query_one("#fields", OptionList)
+        lst.highlighted = 0
+        lst.focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        self.dismiss(event.option.id)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
 
 
 class SendScreen(ModalScreen[dict]):
@@ -604,6 +654,7 @@ class MeshOmitApp(App):
         self.unread: dict = {}
         self.last_test: dict | None = None      # the last test call heard, for the operator's reply
         self.last_from: dict[str, dict] = {}    # last message heard per sender
+        self.picking = False                    # the field list is open
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -672,6 +723,8 @@ class MeshOmitApp(App):
         self.write_system("*** Type in the box under this feed and press Enter: it goes to the window you are looking "
                           "at (a channel, a room or a <name> private window, which is encrypted). Empty Enter opens the "
                           "big send window with emoticons and quick texts; /help lists the commands.")
+        self.write_system("*** Type { in a message for a list of fields: {hops} {via} {snr} {location} {time}... "
+                          "They are filled in when you send, for the station you address with @[name].")
         self.write_system("*** Keys when the box is not focused (press Escape): 1-9 window, a answer the last test "
                           "with hops and SNR, m mode, j room, d dashboard, b beacon, t test, r poll, q quit. "
                           "Click a nick or a <name> for a private window.")
@@ -846,10 +899,70 @@ class MeshOmitApp(App):
                 line.append("  (set a position on your own node to see distances)", style="#8A8A8A")
         self.query_one("#conversation", RichLog).write(line)
 
+    def addressed_record(self, text: str) -> dict | None:
+        """The message the fields refer to: the last one from the station named with @[...] at the start of
+        the text, else the last message received in the window being looked at, else the last test call."""
+        m = re.match(r"\s*@\[([^\]]+)\]", text or "")
+        if m:
+            want = m.group(1).strip().lower()
+            for n, rec in self.last_from.items():
+                if n.lower() == want:
+                    return rec
+        for vk, _, rec in reversed(self.lines):
+            if rec and rec.get("kind") in ("rx", "beacon_reply", "dm") and (self.view == ALL or vk == self.view):
+                return rec
+        return self.last_test
+
+    def field_values(self, text: str) -> dict:
+        rec = self.addressed_record(text) or {}
+        hops = rec.get("hops")
+        names = [n for n in (rec.get("path_names") or []) if n]
+        cfg = self.engine.cfg if self.engine else {}
+        return {
+            "name": rec.get("sender", "?"),
+            "hops": self.engine.hops_words(hops) if self.engine else "?",
+            "via": ("via " + ">".join(names[-4:])) if names else ("direct" if hops == 0 else "?"),
+            "snr": "?" if rec.get("snr") is None else "%+.1f" % rec["snr"],
+            "rssi": "?" if rec.get("rssi") is None else "%.0f" % rec["rssi"],
+            "heard": time.strftime("%H:%M", time.localtime(rec["ts"])) if rec.get("ts") else "?",
+            "location": cfg.get("operator_location") or (cfg.get("locations") or ["here"])[0],
+            "time": time.strftime("%H:%M"),
+            "me": self.engine.node_name if self.engine else "?",
+        }
+
+    def expand_fields(self, text: str) -> str:
+        """Replace {hops}, {via}, {snr}... in a typed message. Unknown names are left as typed."""
+        if "{" not in text:
+            return text
+        values = self.field_values(text)
+        return re.sub(r"\{(\w+)\}", lambda m: str(values.get(m.group(1), m.group(0))), text)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id not in ("send_line", "send_text") or self.picking or not self.engine:
+            return
+        value = event.value
+        idx = value.rfind("{")
+        pos = event.input.cursor_position
+        # a { just typed (at the end, or at the cursor), not a {{ and not an already closed {field}
+        if idx >= 0 and idx in (len(value) - 1, pos - 1, pos) and "}" not in value[idx:]                 and not (idx > 0 and value[idx - 1] == "{"):
+            self.picking = True
+            self.run_worker(self.pick_field(event.input, idx), exclusive=False, name="fields")
+
+    async def pick_field(self, inp: Input, idx: int):
+        try:
+            key = await self.push_screen_wait(FieldScreen(self.field_values(inp.value)))
+        finally:
+            self.picking = False
+        if key and inp.value[idx:idx + 1] == "{":
+            inp.value = inp.value[:idx + 1] + key + "}" + inp.value[idx + 1:]
+            inp.cursor_position = idx + len(key) + 2
+        inp.focus()
+
     async def send_to_target(self, target, text: str):
         if not self.engine.mc:
             self.write_system("*** Not connected to the node yet.")
             return
+        text = self.expand_fields(text)
         if target[0] == "chan":
             await self.engine.send_channel(target[1], text, kind="tx")
         else:

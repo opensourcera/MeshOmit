@@ -298,3 +298,41 @@ def test_operator_reply_to_last_test():
             assert eng.mc.sent[-1][0] == "chan" and eng.mc.sent[-1][1] == 0 and "@[W3DEF]" in eng.mc.sent[-1][2]
             eng.stop()
     run(body)
+
+
+def test_fields_in_typed_messages():
+    from meshomit.app import FieldScreen
+
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            inp = app.query_one("#send_line", Input)
+            eng.on_channel_msg(channel_msg(1, "K1ABC", "Test", hops=2, snr=7.5))
+            await pilot.pause(0.3)
+            # fields are filled in when sending, unknown ones stay as typed
+            inp.value = "@[K1ABC] got you {hops} {via}, {location} {nosuch}"
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            sent = eng.mc.sent[-1][2]
+            assert sent.startswith("@[K1ABC] got you 2 hops ?, Springfield {nosuch}"), sent
+            # typing { opens the list; Enter on an entry inserts the field
+            inp.value = "@[K1ABC] "
+            inp.cursor_position = len(inp.value)
+            await pilot.press("left_curly_bracket")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, FieldScreen), type(app.screen).__name__
+            await pilot.press("down", "enter")
+            await pilot.pause(0.4)
+            assert inp.value == "@[K1ABC] {hops}" and app.focused is inp, inp.value
+            # Escape leaves the brace alone
+            inp.value = "snr is {"
+            inp.cursor_position = len(inp.value)
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, FieldScreen)
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            assert inp.value == "snr is {"
+            eng.stop()
+    run(body)

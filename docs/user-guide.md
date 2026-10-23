@@ -172,6 +172,30 @@ the same answer to that station's last message, test or not. The wording comes f
 `operator_replies` list in `messages.json`; these lines skip the human pass, so they are sent exactly as
 written.
 
+### Fields in your own messages
+
+While typing, in the input line or in the big send window, type `{` and a list opens:
+
+| field | filled in with |
+|---|---|
+| `{name}` | the station you address |
+| `{hops}` | hops of its last message ("direct, no repeater", "3 hops") |
+| `{via}` | the repeaters it came through ("via Hilltop>Ridge", or "direct") |
+| `{snr}`, `{rssi}` | SNR in dB and RSSI in dBm of its last message |
+| `{heard}` | when its last message was heard |
+| `{location}` | your place, `operator_location` in `config.json` |
+| `{time}` | the time now |
+| `{me}` | your node's name |
+
+Pick one with Enter (or click), Escape closes the list and leaves the `{` typed. The list shows the value
+each field would take right now. The fields are replaced when you press Enter to send, so you see
+`@[K1ABC] got you {hops} {via}, {location}` while typing and the mesh sees
+`@[K1ABC] got you 2 hops via Hilltop>Ridge, Springfield`.
+
+Which station the fields refer to: the one you address with `@[name]` at the start of the message, using
+its last message; without a mention, the last message received in the window you are looking at; failing
+that, the last test call heard. A `{word}` that is not a field is sent as typed.
+
 ## 5. The big send window
 
 Enter on an empty input line, `/send`, or the *Enter* key when the input line is not focused. It is a

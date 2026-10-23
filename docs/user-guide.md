@@ -178,6 +178,14 @@ the same answer to that station's last message, test or not. The wording comes f
 `operator_replies` list in `messages.json`; these lines skip the human pass, so they are sent exactly as
 written.
 
+### Naming someone: `@`
+
+Type `@` at the start of a word and a list of the stations heard in the last three hours opens, those
+who spoke in the window you are looking at first, newest first, with the channel of their last message,
+their hops, how long ago, and "contact" when the station is in your node's contact list. Enter (or a
+click) puts `@[Name] ` in your message, which the MeshCore apps show highlighted to that person. Escape
+leaves the `@` typed. This needs no contact list: it is who you heard, not who the node knows.
+
 ### Fields in your own messages
 
 While typing, in the input line or in the big send window, type `{` and a list opens:

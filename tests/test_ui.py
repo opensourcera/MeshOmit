@@ -452,3 +452,36 @@ def test_contacts_manual_add_forget_clear():
                 assert len(json.load(f)) == 2
             eng.stop()
     run(body)
+
+
+def test_at_opens_people_list():
+    from meshomit.app import PeopleScreen
+
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            inp = app.query_one("#send_line", Input)
+            eng.on_channel_msg(channel_msg(0, "Zed", "hello", hops=3))
+            eng.on_channel_msg(channel_msg(1, "Alice T-Deck", "Test", hops=2))
+            await pilot.pause(0.3)
+            await pilot.press("escape", "3")  # the #test window: Alice first
+            await pilot.pause(0.3)
+            await pilot.press("enter")
+            inp.value = "hi "
+            inp.cursor_position = 3
+            await pilot.press("at")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, PeopleScreen), type(app.screen).__name__
+            assert [r[0] for r in app.screen.rows] == ["Alice T-Deck", "Zed"] and app.screen.rows[0][4] is True
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            assert inp.value == "hi @[Alice T-Deck] " and app.focused is inp, inp.value
+            # an @ inside a word (an email, say) does not open it
+            inp.value = "mail me at x@y"
+            inp.cursor_position = len(inp.value)
+            await pilot.pause(0.4)
+            assert not isinstance(app.screen, PeopleScreen)
+            eng.stop()
+    run(body)

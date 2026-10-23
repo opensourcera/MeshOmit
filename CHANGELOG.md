@@ -24,6 +24,7 @@ First public release, as a beta.
 - Fields in typed messages: `{` opens a list of `{hops}`, `{via}`, `{snr}`, `{rssi}`, `{heard}`,
   `{location}`, `{time}`, `{name}`, `{me}`, filled in when the message is sent for the station addressed.
   The same list offers the emoticons, shown as pictures and inserted as text.
+- `@` in a message opens the list of stations heard in the last 3 hours and inserts a mention.
 - Contacts: manual mode (`contacts.manual`), `/add` of waiting adverts, `/forget`, `/contacts export`,
   `/contacts clear yes` with a backup, `/contacts restore` from `contacts.json`.
 - Repeaters panel: battery percentage and daily drain, best neighbour that is not ours; `/repeaters`

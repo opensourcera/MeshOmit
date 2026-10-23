@@ -48,6 +48,10 @@ Footer { background: #1a1a4a; }
 #pin_box { width: 60; height: auto; border: thick #4040a0; background: #101030; padding: 1 2; }
 FieldScreen { align: left bottom; }
 SnippetScreen { align: left bottom; }
+PeopleScreen { align: left bottom; }
+#people_box { width: 90; height: auto; max-height: 18; border: round #C8A2C8; background: #101020; margin: 0 0 2 1; }
+#people_box Label { color: #C8A2C8; padding: 0 1; }
+#people { height: auto; max-height: 14; background: #101020; }
 #snip_box { width: 110; height: auto; max-height: 20; border: round #C8A2C8; background: #101020; margin: 0 0 2 1; }
 #snip_box Label { color: #C8A2C8; padding: 0 1; }
 #snips { height: auto; max-height: 12; background: #101020; }
@@ -335,6 +339,46 @@ class FieldScreen(ModalScreen[str]):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         self.dismiss(event.option.id)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class PeopleScreen(ModalScreen[str]):
+    """The list that opens on @: the stations heard lately, those of the current window first. Enter puts a
+    mention of the chosen one in the message."""
+
+    BINDINGS = [Binding("escape", "cancel", "Close")]
+
+    def __init__(self, rows: list):
+        super().__init__()
+        self.rows = rows  # (name, where, hops, ago_seconds, is_contact, in_this_window)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="people_box"):
+            yield Label("Heard in the last 3 hours, this window first. Enter mentions the station (@[name]), "
+                        "Escape closes.")
+            lst = OptionList(id="people")
+            for name, where, hops, ago, contact, here in self.rows:
+                t = Text("%-24s" % name[:24], style=("bold " if here else "") + nick_color(name))
+                t.append(" %-12s" % (where or "")[:12], style="#A0A0A0")
+                t.append(" %-8s" % ("" if hops is None else "direct" if hops == 0 else "%dh" % hops), style="grey70")
+                t.append(" %-7s" % MeshOmitApp.ago(ago), style="grey50")
+                t.append(" contact" if contact else "", style="#80FF80")
+                lst.add_option(Option(t, id="p:" + name))
+            if not self.rows:
+                lst.add_option(Option(Text("nobody heard yet", style="grey50"), disabled=True))
+            yield lst
+
+    def on_mount(self) -> None:
+        lst = self.query_one("#people", OptionList)
+        if self.rows:
+            lst.highlighted = 0
+        lst.focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option.id and event.option.id.startswith("p:"):
+            self.dismiss(event.option.id[2:])
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -919,6 +963,8 @@ class MeshOmitApp(App):
         self.write_system("*** Type in the box under this feed and press Enter: it goes to the window you are looking "
                           "at (a channel, a room or a <name> private window, which is encrypted). Empty Enter opens the "
                           "big send window with emoticons and quick texts; /help lists the commands.")
+        self.write_system("*** Type @ in a message for the list of people heard lately: Enter puts @[name] in, "
+                          "which their app shows as a mention.")
         self.write_system("*** Type { in a message for a list of fields: {hops} {via} {snr} {location} {time}... "
                           "They are filled in when you send, for the station you address with @[name]. "
                           "Type {{ for your saved lines (add and edit them there).")
@@ -1208,12 +1254,46 @@ class MeshOmitApp(App):
         if event.input.id not in ("send_line", "send_text") or self.picking or not self.engine:
             return
         value = event.value
+        at = value.rfind("@")
+        if at >= 0 and at in (len(value) - 1, event.input.cursor_position - 1) and (at == 0 or value[at - 1] == " ") \
+                and not value[at + 1:at + 2] == "[":
+            self.picking = True
+            self.run_worker(self.pick_person(event.input, at), exclusive=False, name="people")
+            return
         idx = value.rfind("{")
         pos = event.input.cursor_position
         # a { just typed (at the end, or at the cursor), not a {{ and not an already closed {field}
         if idx >= 0 and idx in (len(value) - 1, pos - 1, pos) and "}" not in value[idx:]                 and not (idx > 0 and value[idx - 1] == "{"):
             self.picking = True
             self.run_worker(self.pick_field(event.input, idx), exclusive=False, name="fields")
+
+    def people_rows(self) -> list:
+        """Who was heard in the last 3 hours: the current window's stations first, then the rest, newest first."""
+        now = time.time()
+        keys = set(self.engine.mc.contacts) if self.engine and self.engine.mc else set()
+        names_of_contacts = {(c.get("adv_name") or "") for k, c in (self.engine.mc.contacts.items()
+                                                                   if self.engine and self.engine.mc else [])}
+        rows = []
+        for n, u in self.users.items():
+            ts = u.get("ts", 0)
+            if not ts or now - ts > 3 * 3600 or (self.engine and n == self.engine.node_name):
+                continue
+            here = self.view == ALL or bool(u.get("chans", {}).get(self.view))
+            rec = self.last_from.get(n) or {}
+            rows.append((n, rec.get("channel_name") or "", u.get("hops"), int(now - ts), n in names_of_contacts, here))
+        rows.sort(key=lambda r: (not r[5], r[3]))
+        return rows[:40] if keys or rows else rows
+
+    async def pick_person(self, inp: Input, at: int):
+        try:
+            name = await self.push_screen_wait(PeopleScreen(self.people_rows()))
+        finally:
+            self.picking = False
+        if name and inp.value[at:at + 1] == "@":
+            ins = "@[%s] " % name
+            inp.value = inp.value[:at] + ins + inp.value[at + 1:]
+            inp.cursor_position = at + len(ins)
+        inp.focus()
 
     async def pick_field(self, inp: Input, idx: int):
         try:

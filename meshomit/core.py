@@ -197,6 +197,7 @@ class Engine:
         self.pin_needed = asyncio.Event()
         self.pending_cli: dict[str, list] = {}
         self.tasks: set = set()
+        self.polling = False
 
     # ------------------------------------------------------------------ helpers
     def log(self, text: str, level: str = "info"):
@@ -858,14 +859,20 @@ class Engine:
             await asyncio.sleep(interval)
 
     async def poll_repeaters(self):
-        for rep in self.cfg.get("repeaters", []):
-            if not self.mc:
-                return
-            try:
-                await self.poll_one(rep)
-            except Exception as e:
-                self.log("%s: poll failed: %s" % (rep["name"], e), "warn")
-            self.ui.repeaters(list(self.repeater_rows.values()))
+        if self.polling:  # the r key pressed during a poll: one at a time
+            return
+        self.polling = True
+        try:
+            for rep in self.cfg.get("repeaters", []):
+                if not self.mc:
+                    return
+                try:
+                    await self.poll_one(rep)
+                except Exception as e:
+                    self.log("%s: poll failed: %s" % (rep["name"], e), "warn")
+                self.ui.repeaters(list(self.repeater_rows.values()))
+        finally:
+            self.polling = False
 
     async def poll_one(self, rep: dict):
         mc = self.mc
@@ -888,17 +895,25 @@ class Engine:
             if path:
                 row["trace_there"] = path[0].get("snr")
                 row["trace_back"] = path[-1].get("snr") if len(path) > 1 else trace_evt[-1].get("snr")
-        # 2. login + status
+        # 2. login + status, each tried twice: a busy repeater drops the odd packet
         pw = read_password(rep["password_file"], rep.get("password_key"))
-        async with self.cmd_lock:
-            await mc.commands.send_login(key, pw)
-        ev = await mc.wait_for_event(EventType.LOGIN_SUCCESS, timeout=15)
-        if not ev:
-            row["note"] = "no login answer"
-        else:
+        ev = None
+        for attempt in range(2):
             async with self.cmd_lock:
-                await mc.commands.send_statusreq(key)
-            st = await mc.wait_for_event(EventType.STATUS_RESPONSE, timeout=15)
+                await mc.commands.send_login(key, pw)
+            ev = await mc.wait_for_event(EventType.LOGIN_SUCCESS, timeout=15)
+            if ev:
+                break
+        if not ev:
+            row["note"] = "no login answer (2 tries)"
+        else:
+            st = None
+            for attempt in range(2):
+                async with self.cmd_lock:
+                    await mc.commands.send_statusreq(key)
+                st = await mc.wait_for_event(EventType.STATUS_RESPONSE, timeout=15)
+                if st:
+                    break
             if st:
                 p = st.payload
                 row.update({
@@ -909,7 +924,7 @@ class Engine:
                     "recv_flood": p.get("recv_flood"), "recv_direct": p.get("recv_direct"),
                 })
             else:
-                row["note"] = "no status answer"
+                row["note"] = "no status answer (2 tries)"
             # 3. neighbours: the answer comes as direct messages, collected through pending_cli
             self.pending_cli[prefix] = []
             try:

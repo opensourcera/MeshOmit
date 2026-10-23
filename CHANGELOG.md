@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.0.0 (2026-10-23)
+## 1.0.0 beta (2026-10-23)
 
-First public release.
+First public release, as a beta.
 
 - IRC-style screen built with Textual: feed, status, window list, nick list, repeater table, event log.
 - Windows per channel, room and private conversation, with unread counters and a nick list per window.

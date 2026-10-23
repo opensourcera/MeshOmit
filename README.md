@@ -2,6 +2,10 @@
 
 ![MeshOmit in a live session: the feed, windows, nicks, repeaters and events panels](docs/screenshot-session.jpg)
 
+**Beta.** MeshOmit runs every day on the author's node, but it is young software: expect rough edges,
+and please open an issue for anything that breaks or looks wrong. Settings and files may still change
+between versions.
+
 An IRC-style terminal client and test-reply bot for a [MeshCore](https://github.com/ripplebiz/MeshCore)
 companion node, in Python. Connect a Cardputer, T-Deck, Heltec, RAK or any other board running the
 companion firmware over Bluetooth, USB serial or WiFi, and MeshOmit gives you:

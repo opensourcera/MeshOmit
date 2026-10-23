@@ -23,6 +23,7 @@ First public release, as a beta.
   prepared in the input line for the operator to send by hand.
 - Fields in typed messages: `{` opens a list of `{hops}`, `{via}`, `{snr}`, `{rssi}`, `{heard}`,
   `{location}`, `{time}`, `{name}`, `{me}`, filled in when the message is sent for the station addressed.
+  The same list offers the emoticons, shown as pictures and inserted as text.
 - Repeater polling: trace, login, status, neighbour list, all stored.
 - Dashboard with cards, sparklines and tables for the last 24 hours and all time.
 - Connections: Bluetooth LE (Windows pairing with a PIN through the Windows runtime, radio switched on

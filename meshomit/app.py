@@ -281,24 +281,39 @@ FIELDS = [
 ]
 
 
+EMOJI_FOR = {":)": "🙂", ";)": "😉", ":D": "😃", ":P": "😛", ":(": "🙁",
+             "<3": "❤️", "o/": "👋", "^^": "😊", "73": "📻", "+1": "👍",
+             ":-)": "🙂", ";-)": "😉", ":-D": "😃", ":-(": "🙁", ":O": "😮",
+             "xD": "😆", ":*": "😘", "B)": "😎", "<3<3": "💖", "\\o/": "🎉"}
+
+
 class FieldScreen(ModalScreen[str]):
-    """The list that opens on `{`: pick a field, it is filled in when the message is sent."""
+    """The list that opens on `{`: a field (filled in when the message is sent) or an emoticon. Emoticons are
+    shown as the picture they stand for and inserted as the text form, which every mesh device can show."""
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, values: dict):
+    def __init__(self, values: dict, emoticons: list | None = None):
         super().__init__()
         self.values = values
+        self.emoticons = emoticons or []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="field_box"):
-            yield Label("Fields, filled in when you send (Enter picks, Escape closes):")
+            yield Label("Fields are filled in when you send; emoticons go in as text (Enter picks, Escape closes):")
             lst = OptionList(id="fields")
             for key, what in FIELDS:
                 t = Text("{%s}" % key, style="bold #FFFF00")
                 t.append("  %-32s" % what, style="#A0A0A0")
                 t.append(" " + str(self.values.get(key, "?"))[:22], style="#80FF80")
-                lst.add_option(Option(t, id=key))
+                lst.add_option(Option(t, id="field:" + key))
+            if self.emoticons:
+                lst.add_option(None)  # a separator line
+                for emo in self.emoticons:
+                    t = Text("%-3s " % EMOJI_FOR.get(emo, " "), style="bold")
+                    t.append("%-6s" % emo, style="bold #FFFF00")
+                    t.append("  sent as the text on the left", style="#A0A0A0")
+                    lst.add_option(Option(t, id="emo:" + emo))
             yield lst
 
     def on_mount(self) -> None:
@@ -950,12 +965,15 @@ class MeshOmitApp(App):
 
     async def pick_field(self, inp: Input, idx: int):
         try:
-            key = await self.push_screen_wait(FieldScreen(self.field_values(inp.value)))
+            picked = await self.push_screen_wait(FieldScreen(self.field_values(inp.value),
+                                                             self.engine.msgs.get("emoticons", [])))
         finally:
             self.picking = False
-        if key and inp.value[idx:idx + 1] == "{":
-            inp.value = inp.value[:idx + 1] + key + "}" + inp.value[idx + 1:]
-            inp.cursor_position = idx + len(key) + 2
+        if picked and inp.value[idx:idx + 1] == "{":
+            kind, _, what = picked.partition(":")
+            ins = "{%s}" % what if kind == "field" else what + " "  # an emoticon replaces the brace
+            inp.value = inp.value[:idx] + ins + inp.value[idx + 1:]
+            inp.cursor_position = idx + len(ins)
         inp.focus()
 
     async def send_to_target(self, target, text: str):

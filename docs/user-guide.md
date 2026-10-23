@@ -187,8 +187,10 @@ While typing, in the input line or in the big send window, type `{` and a list o
 | `{time}` | the time now |
 | `{me}` | your node's name |
 
-Pick one with Enter (or click), Escape closes the list and leaves the `{` typed. The list shows the value
-each field would take right now. The fields are replaced when you press Enter to send, so you see
+Below the fields the same list offers the emoticons of `messages.json`, drawn as the picture they stand
+for (a smiling face, a waving hand, a heart...) and inserted as their text form, `:)` `o/` `<3`, which every
+mesh device can show. Pick one with Enter (or click), Escape closes the list and leaves the `{` typed. The
+list shows the value each field would take right now. The fields are replaced when you press Enter to send, so you see
 `@[K1ABC] got you {hops} {via}, {location}` while typing and the mesh sees
 `@[K1ABC] got you 2 hops via Hilltop>Ridge, Springfield`.
 

@@ -326,6 +326,15 @@ def test_fields_in_typed_messages():
             await pilot.press("down", "enter")
             await pilot.pause(0.4)
             assert inp.value == "@[K1ABC] {hops}" and app.focused is inp, inp.value
+            # the last entries are the emoticons: shown as pictures, inserted as text
+            inp.value = "@[K1ABC] {hops} "
+            inp.cursor_position = len(inp.value)
+            await pilot.press("left_curly_bracket")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, FieldScreen)
+            await pilot.press("end", "enter")
+            await pilot.pause(0.4)
+            assert inp.value == "@[K1ABC] {hops} +1 ", inp.value
             # Escape leaves the brace alone
             inp.value = "snr is {"
             inp.cursor_position = len(inp.value)

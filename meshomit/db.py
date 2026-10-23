@@ -186,6 +186,33 @@ class Db:
         return self.conn.execute(
             "SELECT * FROM repeater_status WHERE name = ? ORDER BY ts DESC LIMIT 1", (name,)).fetchone()
 
+    def last_repeater_row(self, name: str) -> dict | None:
+        """The last poll of a repeater as a dict, or None."""
+        cur = self.conn.execute("SELECT * FROM repeater_status WHERE name = ? ORDER BY ts DESC LIMIT 1", (name,))
+        row = cur.fetchone()
+        return dict(zip([d[0] for d in cur.description], row)) if row else None
+
+    def battery_at(self, name: str, before_ts: int):
+        """(ts, bat_mv) of the newest successful poll at or before before_ts, or None."""
+        return self.conn.execute(
+            "SELECT ts, bat_mv FROM repeater_status WHERE name = ? AND ok = 1 AND bat_mv IS NOT NULL AND ts <= ? "
+            "ORDER BY ts DESC LIMIT 1", (name, before_ts)).fetchone()
+
+    def battery_oldest_since(self, name: str, since_ts: int):
+        """(ts, bat_mv) of the oldest successful poll after since_ts, or None."""
+        return self.conn.execute(
+            "SELECT ts, bat_mv FROM repeater_status WHERE name = ? AND ok = 1 AND bat_mv IS NOT NULL AND ts >= ? "
+            "ORDER BY ts ASC LIMIT 1", (name, since_ts)).fetchone()
+
+    def latest_neighbors(self, name: str) -> list:
+        """(neighbor hash, name, secs_ago, snr) from the newest poll of this repeater that reported neighbours."""
+        last = self.conn.execute("SELECT MAX(ts) FROM repeater_neighbors WHERE repeater = ?", (name,)).fetchone()[0]
+        if last is None:
+            return []
+        return self.conn.execute(
+            "SELECT neighbor, neighbor_name, secs_ago, snr FROM repeater_neighbors WHERE repeater = ? AND ts >= ? "
+            "ORDER BY snr DESC", (name, last - 60)).fetchall()
+
     # ---- dashboard ----
     def hourly(self, hours: int = 24) -> dict:
         """Per-hour counts for the last `hours` hours, oldest first: messages heard, tests heard, replies sent,

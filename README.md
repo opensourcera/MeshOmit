@@ -118,7 +118,7 @@ every name, call sign and place in them is made up.
 | **Status** (top right) | link state and uptime, mode, number of contacts on the node, messages and tests heard, answers given, beacons sent and replied to, time to the next beacon and the next repeater poll, which repeaters carried the traffic in the last hour |
 | **Windows (1-9)** | one entry per channel, room and private conversation, with unread counts; the number in front selects it. A room shows its creator after `*` |
 | **Nicks (last 3 h)** | who spoke in the selected window, most recent first, with hops ("direct", "2h"), distance and direction when both nodes advertise a position, and how many messages |
-| **Repeaters** | the last poll of each configured repeater: battery, uptime in hours, noise floor, trace SNR there/back |
+| **Repeaters** | two lines per configured repeater: battery with a rough percentage and the day's drain, uptime, noise floor, trace SNR there/back; then the neighbour it hears best (your own repeaters left out) with SNR and age. `/repeaters` prints the full report |
 | **Events** | what the program did and why: connection steps, contacts loaded, beacons, why the bot stayed quiet, invitations, repeater results |
 | **Footer** | the single-key shortcuts (they work when the input line is not focused; press Escape) |
 

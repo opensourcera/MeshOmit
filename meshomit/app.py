@@ -43,7 +43,7 @@ Footer { background: #1a1a4a; }
 #nicks { height: 11; background: #000000; border: round #40a040; }
 #channels > .option-list--option-highlighted { background: #202060; }
 #nicks > .option-list--option-highlighted { background: #204020; }
-#repeaters { height: auto; max-height: 9; background: #000000; border: round #2080a0; }
+#repeaters { height: auto; max-height: 14; background: #000000; border: round #2080a0; padding: 0 1; }
 #events { height: 1fr; background: #000000; border: round #a08020; padding: 0 1; }
 #pin_box { width: 60; height: auto; border: thick #4040a0; background: #101030; padding: 1 2; }
 FieldScreen { align: left bottom; }
@@ -867,7 +867,7 @@ class MeshOmitApp(App):
                 yield Static("", id="status")
                 yield OptionList(id="channels")
                 yield OptionList(id="nicks")
-                yield DataTable(id="repeaters")
+                yield Static("", id="repeaters")
                 yield RichLog(id="events", wrap=True, markup=False, highlight=False, min_width=10)
         yield Footer()
 
@@ -876,10 +876,7 @@ class MeshOmitApp(App):
         self.query_one("#channels", OptionList).border_title = "Windows (1-9)"
         self.query_one("#nicks", OptionList).border_title = "Nicks (last 3 h)"
         self.query_one("#events", RichLog).border_title = "Events"
-        t = self.query_one("#repeaters", DataTable)
-        t.border_title = "Repeaters"
-        t.add_columns("Rptr", "Batt", "Up h", "Noise", "Trace", "At")
-        t.cursor_type = "none"
+        self.query_one("#repeaters", Static).border_title = "Repeaters"
         if self.cfg is None:
             self.write_system("*** First run: tell me how to reach your node.")
             self.run_worker(self.first_run(), exclusive=False, name="setup")
@@ -933,6 +930,7 @@ class MeshOmitApp(App):
         self.write_system("*** Texts come from %s" % os.path.basename(self.engine.msgs.get("_path", "messages.json")))
         self.run_worker(self.engine.run(), exclusive=False, name="engine")
         self.set_interval(1.0, self.poll_pin)
+        self.show_repeaters([])
         self.set_interval(30.0, self.refresh_nicks)
 
     # ---- windows (channels, rooms, private chats) ----
@@ -1192,13 +1190,16 @@ class MeshOmitApp(App):
         arg = parts[1].strip() if len(parts) > 1 else ""
         if cmd in ("help", "?"):
             self.write_system("*** Commands: /reply [NAME] (answer the last test, or NAME's last message, with hops "
-                              "and SNR)  /bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
+                              "and SNR)  /repeaters (battery, drain, best neighbour of each of our repeaters)  "
+                              "/bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
                               "/msg NAME TEXT  /whois NAME (type, last advert, position, distance)  /join (room)  "
                               "/send (big window)  /dash  /beacon  /test  /poll  /pause  /quit")
         elif cmd in ("whois", "who", "where", "loc") and arg:
             self.whois(arg)
         elif cmd in ("reply", "re", "answer"):
             self.prepare_reply(arg)
+        elif cmd in ("repeaters", "rep", "rptr"):
+            self.repeaters_report()
         elif cmd in ("bot", "op", "operator"):
             want = "bot" if cmd == "bot" else "operator"
             if self.engine.mode != want:
@@ -1479,19 +1480,110 @@ class MeshOmitApp(App):
             out[name] = out.get(name, 0) + n
         return out
 
+    @staticmethod
+    def battery_style(pct) -> str:
+        return "#00FF00" if pct is None or pct >= 50 else "#FFFF00" if pct >= 25 else "bold #FF4040"
+
+    @staticmethod
+    def ago(secs) -> str:
+        if secs is None:
+            return "?"
+        return "%ds" % secs if secs < 60 else "%dm" % (secs // 60) if secs < 3600 else "%.1fh" % (secs / 3600)
+
     def show_repeaters(self, rows: list):
-        t = self.query_one("#repeaters", DataTable)
-        t.clear()
-        for r in rows:
-            if r.get("ok"):
-                batt = "%.2fV" % ((r.get("bat_mv") or 0) / 1000)
-                up = "%.1f" % ((r.get("uptime_s") or 0) / 3600)
-                noise = str(r.get("noise_floor"))
+        """Two lines per repeater: battery (with a rough percentage and the day's drain), uptime, noise and
+        trace; then the strongest neighbour that is not one of ours."""
+        if not self.engine:
+            return
+        names = [r["name"] for r in self.engine.cfg.get("repeaters", [])] or [r["name"] for r in rows]
+        txt = Text()
+        for name in names:
+            rep = self.engine.repeater_report(name)
+            txt.append("%-5s" % name[:5], style="bold bright_white")
+            if rep.get("ok"):
+                pct = rep.get("percent")
+                txt.append(" %.2fV" % ((rep.get("bat_mv") or 0) / 1000), style=self.battery_style(pct))
+                if pct is not None:
+                    txt.append(" %d%%" % pct, style=self.battery_style(pct))
+                if rep.get("mv_per_day") is not None:
+                    txt.append(" %+dmV/d" % -round(rep["mv_per_day"]), style="grey50")
+                if rep.get("days_left") is not None:
+                    txt.append(" ~%.0fd" % rep["days_left"], style="#FFFF00" if rep["days_left"] < 7 else "grey50")
+                txt.append(" up %.0fh" % ((rep.get("uptime_s") or 0) / 3600), style="grey70")
+                txt.append("\n      noise %s" % rep.get("noise_floor"), style="grey70")
             else:
-                batt, up, noise = "-", "-", r.get("note") or "no answer"
-            tr = r.get("trace_there")
-            trace = "-" if tr is None else "%.1f/%.1f" % (tr, r.get("trace_back") or 0)
-            t.add_row(r["name"], batt, up, noise, trace, time.strftime("%H:%M", time.localtime(r.get("ts", 0))))
+                txt.append(" " + (rep.get("note") or "no poll yet"), style="#FF8000")
+                txt.append("\n     ")
+            tr = rep.get("trace_there")
+            if tr is not None:
+                txt.append(" trace %.1f/%.1f" % (tr, rep.get("trace_back") or 0), style="#00FFFF")
+            if rep.get("ts"):
+                txt.append(" " + time.strftime("%H:%M", time.localtime(rep["ts"])), style="grey42")
+            txt.append("\n")
+            best = rep.get("best")
+            if best:
+                h, n, secs, snr = best
+                txt.append("      hears ", style="grey50")
+                txt.append((n or h)[:12], style="bold #FFD700")
+                txt.append(" %+.1fdB %s ago" % (snr or 0, self.ago(secs)), style="grey70")
+                txt.append(" %d nbs" % len(rep.get("neighbors_all") or []), style="grey50")
+            elif rep.get("neighbors_all"):
+                txt.append("      hears only our own repeaters", style="grey50")
+            else:
+                txt.append("      no neighbour list yet", style="grey42")
+            txt.append("\n")
+        if not names:
+            txt.append("no repeaters configured", style="grey42")
+        self.query_one("#repeaters", Static).update(txt)
+
+    def repeaters_report(self):
+        """The /repeaters command: the full picture of each of our repeaters in the feed."""
+        names = [r["name"] for r in self.engine.cfg.get("repeaters", [])]
+        if not names:
+            self.write_system("*** No repeaters in config.json.")
+            return
+        for name in names:
+            rep = self.engine.repeater_report(name)
+            line = Text(time.strftime("[%H:%M] "), style="#A0A0A0")
+            line.append("*** %s: " % name, style="bold #00FF00")
+            if not rep.get("ok"):
+                line.append("last poll failed (%s)" % (rep.get("note") or "no answer"), style="#FF8000")
+                self.query_one("#conversation", RichLog).write(line)
+                continue
+            pct = rep.get("percent")
+            line.append("battery %.2f V" % ((rep.get("bat_mv") or 0) / 1000), style=self.battery_style(pct))
+            if pct is not None:
+                line.append(" (about %d%%)" % pct, style=self.battery_style(pct))
+            if rep.get("mv_per_day") is None:
+                line.append(", trend after a day of polls", style="#00FF00")
+            elif rep["mv_per_day"] <= 5:
+                line.append(", holding (%+d mV over the last day)" % -round(rep["mv_per_day"]), style="#00FF00")
+            else:
+                line.append(", losing %d mV a day" % round(rep["mv_per_day"]), style="#00FF00")
+                if rep.get("days_left") is not None:
+                    line.append(", roughly %.0f days to 3.4 V" % rep["days_left"],
+                                style="#FFFF00" if rep["days_left"] < 7 else "#00FF00")
+            line.append(". Up %.1f h, noise %s dBm, last RSSI %s, %s packets in / %s out, %s rx errors"
+                        % ((rep.get("uptime_s") or 0) / 3600, rep.get("noise_floor"), rep.get("last_rssi"),
+                           rep.get("nb_recv"), rep.get("nb_sent"), rep.get("recv_errors")), style="#00FF00")
+            tr = rep.get("trace_there")
+            if tr is not None:
+                line.append(". Trace %.1f dB there, %.1f dB back" % (tr, rep.get("trace_back") or 0), style="#00FFFF")
+            line.append(". Polled %s." % time.strftime("%H:%M", time.localtime(rep.get("ts", 0))), style="#00FF00")
+            self.query_one("#conversation", RichLog).write(line)
+            others = rep.get("others") or []
+            line = Text(" " * 8)
+            if others:
+                line.append("hears best: ", style="grey70")
+                for i, (h, n, secs, snr) in enumerate(others[:5]):
+                    line.append(("" if i == 0 else ", ") + (n or h), style="bold #FFD700" if i == 0 else "#FFD700")
+                    line.append(" %+.1f dB %s ago" % (snr or 0, self.ago(secs)), style="grey70")
+                own = len(rep.get("neighbors_all") or []) - len(others)
+                if own:
+                    line.append(" (plus %d of ours)" % own, style="grey50")
+            else:
+                line.append("no neighbours reported yet", style="grey50")
+            self.query_one("#conversation", RichLog).write(line)
 
     # ---- PIN handling ----
     def poll_pin(self):

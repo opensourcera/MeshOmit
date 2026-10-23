@@ -80,7 +80,11 @@ the person's name.
 direction ("8.0km W"). The creator of a room heads its list with a `*`. In the *All* window the list
 covers everything.
 
-**Repeaters.** The last poll of each configured repeater: battery, uptime, noise floor, trace SNR, time.
+**Repeaters.** Two lines per configured repeater. First the last poll: battery voltage with a rough
+percentage (green above 50 %, yellow, red below 25 %) and how many mV it lost or gained over the last day,
+uptime, noise floor, the trace SNR there and back, the time. Then the neighbour it hears best among the
+nodes that are not your own repeaters, with its SNR and how long ago, and how many neighbours it reported
+in all. `/repeaters` prints the full picture in the feed (section 11).
 
 **Events.** What the program did and any problem: connection steps, contacts loaded, beacons sent, the
 reason the bot stayed quiet, invitations received, repeater results.
@@ -117,6 +121,7 @@ commands below do everything the keys do, so you rarely need to leave the line.
 | `/msg Name text` | sends a direct message without changing window; names with spaces work, the longest leading words that name a contact exactly are used |
 | `/whois Name` | what the node knows about a contact (section 8); a part of the name is enough (`/who`, `/where`, `/loc`) |
 | `/reply`, `/reply Name` | answer the last test call (or that station's last message) by hand, see "Answering a test yourself" below |
+| `/repeaters` | battery, drain, trace and best neighbour of each of your repeaters (`/rep`) |
 | `/bot`, `/op` | switch the bot on or off (`/mode` toggles) |
 | `/join` | opens the room window (section 6) |
 | `/send` | opens the big send window |
@@ -342,6 +347,13 @@ With repeaters configured (see [configuration.md](configuration.md)), every 30 m
 
 The Repeaters panel shows the latest readings, the dashboard the history, and the events panel one line
 per poll ("Ridge: 4.09 V, up 44.4 h, noise -117, trace 13.25/9.25").
+
+`/repeaters` (or `/rep`) prints, for each of your repeaters: the battery voltage with a rough percentage
+and the trend over the last day ("losing 35 mV a day, roughly 20 days to 3.4 V", or "holding" when solar
+keeps up), uptime, noise floor, last RSSI, packet counters, receive errors, the trace SNR both ways, and
+the five neighbours it hears best with their SNR and age, your own repeaters left out of that list. The
+percentage is an estimate from the resting voltage of a single lithium cell; a repeater on another
+chemistry or under load reads differently.
 
 ## 12. The data
 

@@ -24,6 +24,8 @@ First public release, as a beta.
 - Fields in typed messages: `{` opens a list of `{hops}`, `{via}`, `{snr}`, `{rssi}`, `{heard}`,
   `{location}`, `{time}`, `{name}`, `{me}`, filled in when the message is sent for the station addressed.
   The same list offers the emoticons, shown as pictures and inserted as text.
+- Repeaters panel: battery percentage and daily drain, best neighbour that is not ours; `/repeaters`
+  prints the full report with days left on battery and the top neighbours.
 - Saved lines: `{{` opens a window of your own short texts (`{{tx}}` thank you, ...), with fields allowed
   inside, added, edited and deleted in place and kept in `messages.json`.
 - Repeater polling: trace, login, status, neighbour list, all stored.

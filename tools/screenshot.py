@@ -91,9 +91,13 @@ async def main():
                "recv_direct": 320, "trace_there": 13.2, "trace_back": 9.2, "note": ""}
         eng.db.add_repeater_status(**row)
         row["ts"] = now - 300
-        app.show_repeaters([row, {"name": "Ridge", "pubkey": "3c4d" + "0" * 60, "ok": 1, "bat_mv": 3980,
-                                  "uptime_s": 72000, "noise_floor": -114, "trace_there": 7.5, "trace_back": 5.0,
-                                  "ts": now - 290}])
+        row["neighbors"] = [("3c4d00", "Ridge", 120, 9.5), ("9a8b00", "Lakeview", 40, 6.2), ("77ee00", "Tower2", 900, -1.5)]
+        ridge = {"name": "Ridge", "pubkey": "3c4d" + "0" * 60, "ok": 1, "bat_mv": 3980, "uptime_s": 72000,
+                 "noise_floor": -114, "trace_there": 7.5, "trace_back": 5.0, "ts": now - 290,
+                 "neighbors": [("1a2b00", "Hilltop", 130, 10.1), ("9a8b00", "Lakeview", 300, 2.8)]}
+        eng.cfg["repeaters"] = [{"name": "Hilltop", "pubkey": "1a2b" + "0" * 60}, {"name": "Ridge", "pubkey": "3c4d" + "0" * 60}]
+        eng.repeater_rows = {"Hilltop": row, "Ridge": ridge}
+        app.show_repeaters([row, ridge])
         app.show_status({"state": "listening", "node": "MyNode", "address": "Bluetooth AA:BB:CC:DD:EE:FF",
                          "since": now - 5400, "started": now - 5500, "next_beacon": now + 290, "next_poll": now + 1500,
                          "bot_paused": False, "mode": "operator", "contacts": 212,

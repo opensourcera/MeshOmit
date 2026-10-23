@@ -768,6 +768,59 @@ class Engine:
             text = "@[%s] %s, %s here" % (sender, self.greeting(), self.place())
         return self.humanize(text)[:160]
 
+    @staticmethod
+    def battery_percent(mv) -> int | None:
+        """Rough state of charge of a single lithium cell from its resting voltage."""
+        if not mv:
+            return None
+        v = mv / 1000.0
+        points = [(4.15, 100), (4.05, 90), (3.95, 75), (3.85, 60), (3.78, 45), (3.70, 30), (3.60, 15), (3.45, 5),
+                  (3.30, 0)]
+        if v >= points[0][0]:
+            return 100
+        for (v1, p1), (v2, p2) in zip(points, points[1:]):
+            if v2 <= v <= v1:
+                return int(round(p2 + (p1 - p2) * (v - v2) / (v1 - v2)))
+        return 0
+
+    def own_repeater(self, hash_or_name: str) -> bool:
+        """Is this neighbour one of the repeaters in config.json (by name or hash prefix)?"""
+        h = (hash_or_name or "").lower()
+        for r in self.cfg.get("repeaters", []):
+            if h == r["name"].lower() or (len(h) >= 2 and r["pubkey"].lower().startswith(h[:4])):
+                return True
+        return False
+
+    def repeater_report(self, name: str) -> dict:
+        """Everything the screen shows about one of our repeaters: last poll, battery with a rough percentage
+        and the drain over the last day, the strongest neighbour that is not ours, and the neighbour count."""
+        row = self.repeater_rows.get(name) or self.db.last_repeater_row(name) or {"name": name, "ok": 0, "note": ""}
+        rep = dict(row)
+        mv = rep.get("bat_mv")
+        rep["percent"] = self.battery_percent(mv)
+        rep["mv_per_day"] = rep["days_left"] = None
+        if mv and rep.get("ts"):
+            ts = int(rep["ts"])
+            old = self.db.battery_at(name, ts - 20 * 3600) or self.db.battery_oldest_since(name, ts - 24 * 3600)
+            if old and ts - old[0] >= 6 * 3600:
+                days = (ts - old[0]) / 86400.0
+                rep["mv_per_day"] = (old[1] - mv) / days
+                # days left from the charge estimate, not the voltage: the top of the curve drops fast
+                pct_old, pct_now = self.battery_percent(old[1]), rep["percent"]
+                if pct_old is not None and pct_now is not None and pct_old - pct_now >= 1:
+                    rep["days_left"] = pct_now / ((pct_old - pct_now) / days)
+        best_of: dict = {}  # one entry per neighbour, the strongest report (retried polls report twice)
+        for h, n, s, q in rep.get("neighbors") or self.db.latest_neighbors(name):
+            k = (h or "").lower()[:4]
+            if k not in best_of or (q or -99) > (best_of[k][3] or -99):
+                best_of[k] = (h, n, s, q)
+        neigh = list(best_of.values())
+        others = [(h, n, s, q) for h, n, s, q in neigh if not self.own_repeater(n) and not self.own_repeater(h)]
+        rep["neighbors_all"] = sorted(neigh, key=lambda x: -(x[3] or -99))
+        rep["others"] = sorted(others, key=lambda x: -(x[3] or -99))
+        rep["best"] = rep["others"][0] if rep["others"] else None
+        return rep
+
     def save_snippets(self, snippets: dict) -> str:
         return save_snippets(self.msgs, self.cfg_path, snippets)
 

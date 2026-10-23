@@ -52,30 +52,25 @@ Windows users can instead download `MeshOmit.exe` from the releases page, put it
 
 ## A look at the screen
 
-```
- MeshOmit                                                                       16:42:10
-┌─ #test ─────────────────────────────────────────────┐┌─ Status ──────────────────────┐
-│ [16:30] #test  <K1ABC> Test                        ││ OPERATOR  you chat, bot off   │
-│ [16:30] #test  <MyNode> @[K1ABC] hi, im in East    ││ node   MyNode                 │
-│         Cobb, you?                                  ││ link   Bluetooth              │
-│ [16:33] #test  <N2XYZ Mobile> good copy, 2 hops     ││ contacts 350                  │
-│                                                     │└───────────────────────────────┘
-│                                                     │┌─ Windows (1-9) ───────────────┐
-│                                                     ││ 1 All                         │
-│                                                     ││ 2 Public  (3)                 │
-│                                                     ││ 3 #test                       │
-│                                                     ││ 4 #mytown  *MyNode          │
-│                                                     ││ 5 -> K1ABC                   │
-│                                                     │└───────────────────────────────┘
-│                                                     │┌─ Nicks (last 3 h) ────────────┐
-│                                                     ││ K1ABC          2h 8.0km W x3 │
-│                                                     ││ N2XYZ Mobile    direct x1     │
-└─────────────────────────────────────────────────────┘└───────────────────────────────┘
- #test  hello everyone, anyone around tonight?_
- q Quit  m Bot/Operator  j Room  d Dashboard  b Beacon now  t Send Test  r Poll  p Pause
-```
+Operator mode, in lilac: the feed with one colour per station, a test call in yellow, a mention and a
+direct message highlighted, the window list with a room and a private conversation, the nick list with
+hops and distances, the repeater table and the input line with its target label.
 
-The names and call signs above are made up.
+![The main screen in Operator mode](docs/screenshot-main.svg)
+
+Bot mode turns the screen blue, so the mode is visible from across the room:
+
+![The main screen in Bot mode](docs/screenshot-bot.svg)
+
+The big send window (Enter on an empty line) with the character counter, the emoticon buttons and the
+ready-made lines, and the dashboard (`d`):
+
+![The send window](docs/screenshot-send.svg)
+
+![The dashboard](docs/screenshot-dashboard.svg)
+
+Every name, call sign and place in these pictures is made up; they are rendered by `tools/screenshot.py`
+from a fake node.
 
 ## Files
 
@@ -86,6 +81,7 @@ config.example.json  every setting with its default; the setup form writes confi
 meshomit.cmd, meshomit.sh   launchers
 build_exe.cmd, meshomit_exe.py   the Windows single-file build
 tests/               headless tests of the screen with a fake node
+tools/               screenshot.py renders the pictures above from the fake node
 docs/                the documentation
 ```
 

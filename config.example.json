@@ -21,6 +21,7 @@
     "Downtown",
     "Riverside"
   ],
+  "operator_location": "",
   "channels": {
     "0": "Public",
     "1": "#test"

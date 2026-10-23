@@ -19,6 +19,8 @@ First public release, as a beta.
 - Rooms: hashtag rooms and private rooms with a random key, invitations by direct message, one-key join
   of received invitations, the inviter marked as the room's creator.
 - `/whois`: contact type, last advert, hops, position with a map link, distance and direction.
+- `/reply` and the `a` key: a factual answer to the last test call (name, hops, repeaters, SNR, place)
+  prepared in the input line for the operator to send by hand.
 - Repeater polling: trace, login, status, neighbour list, all stored.
 - Dashboard with cards, sparklines and tables for the last 24 hours and all time.
 - Connections: Bluetooth LE (Windows pairing with a PIN through the Windows runtime, radio switched on

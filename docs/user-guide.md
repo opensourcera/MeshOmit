@@ -116,6 +116,7 @@ commands below do everything the keys do, so you rarely need to leave the line.
 | `/query Name` | opens a private window with that contact (`/q`, `/pm` work too) |
 | `/msg Name text` | sends a direct message without changing window; names with spaces work, the longest leading words that name a contact exactly are used |
 | `/whois Name` | what the node knows about a contact (section 8); a part of the name is enough (`/who`, `/where`, `/loc`) |
+| `/reply`, `/reply Name` | answer the last test call (or that station's last message) by hand, see "Answering a test yourself" below |
 | `/bot`, `/op` | switch the bot on or off (`/mode` toggles) |
 | `/join` | opens the room window (section 6) |
 | `/send` | opens the big send window |
@@ -153,6 +154,23 @@ person. Finish the sentence and press Enter.
 
 The nick list and the names in the feed tell you nothing about who is online; the mesh has no presence.
 They tell you who was heard, and when.
+
+### Answering a test yourself
+
+In Operator mode the bot is silent, but you can still answer a test call in two key presses. `/reply`
+in the input line, or the `a` key when the line is not focused, selects the channel the last test came
+from and puts a factual answer in the input line:
+
+```
+@[K1ABC] got you 2 hops via Hilltop>Ridge here in Springfield, +7.5 dB
+```
+
+The station is named with a mention, the hop count and the repeaters come from the strongest copy your
+node heard, the SNR too, and the place is `operator_location` from `config.json` (or the first of your
+`locations`). Read it, change anything, press Enter. Nothing is sent until you do. `/reply Name` prepares
+the same answer to that station's last message, test or not. The wording comes from the
+`operator_replies` list in `messages.json`; these lines skip the human pass, so they are sent exactly as
+written.
 
 ## 5. The big send window
 
@@ -213,6 +231,7 @@ These work when the input line does not have the focus (press Escape first):
 | `d` | dashboard (Escape or `d` closes it) |
 | `b` | send a beacon now |
 | `t` | send "Test" to the window you are looking at (the beacon channel in the *All* window) |
+| `a` | answer the last test call by hand (`/reply`) |
 | `r` | poll the repeaters now |
 | `p` | pause or resume the bot's answers |
 | `q` | quit |

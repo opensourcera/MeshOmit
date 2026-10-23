@@ -268,3 +268,33 @@ def test_all_view_is_default_and_room_join_is_silent():
             assert eng.invite_text("#mytown", None).startswith("join me on channel #mytown")
             eng.stop()
     run(body)
+
+
+def test_operator_reply_to_last_test():
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            inp = app.query_one("#send_line", Input)
+            inp.value = "/reply"
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            assert "No test call heard" in feed_text(app, 3) and inp.value == ""
+            eng.on_channel_msg(channel_msg(0, "W3DEF", "hello all", hops=3, snr=1.0))
+            eng.on_channel_msg(channel_msg(1, "K1ABC", "Test", hops=2, snr=7.5))
+            await pilot.pause(0.3)
+            await pilot.press("escape", "1", "a")
+            await pilot.pause(0.3)
+            assert app.view == ("chan", 1) and app.focused is inp
+            assert inp.value.startswith("@[K1ABC]") and "2 hops" in inp.value and "Springfield" in inp.value
+            assert "+7.5" in inp.value or "copy" in inp.value
+            inp.value = "/reply w3def"
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            assert app.view == ("chan", 0) and inp.value.startswith("@[W3DEF]") and "3 hops" in inp.value
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            assert eng.mc.sent[-1][0] == "chan" and eng.mc.sent[-1][1] == 0 and "@[W3DEF]" in eng.mc.sent[-1][2]
+            eng.stop()
+    run(body)

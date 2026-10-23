@@ -45,6 +45,10 @@ DEFAULT_MESSAGES = {
         "@[{name}] hearing you {hops}, {location}",
         "@[{name}] hey, got you here in {location}",
     ],
+    "operator_replies": [
+        "@[{name}] got you {hops} {via} here in {location}, {snr} dB",
+        "@[{name}] copy, {hops} {via}, {location}",
+    ],
     "quick": [
         "Test",
         "hi all, anyone around?",
@@ -733,6 +737,23 @@ class Engine:
                      "warn")
             text = "@[%s] %s, %s here" % (sender, self.greeting(), self.place())
         return self.humanize(text)[:160]
+
+    def operator_reply(self, rec: dict) -> str:
+        """A factual answer for the operator to send by hand: who, hops, the repeaters, SNR, where we are.
+        No human pass, no history: the operator reads it and may edit it before sending."""
+        templates = self.msgs.get("operator_replies") or DEFAULT_MESSAGES["operator_replies"]
+        hops = rec.get("hops")
+        names = [n for n in (rec.get("path_names") or []) if n]
+        via = "via " + ">".join(names[-4:]) if names else ("direct" if hops == 0 else "")
+        snr = rec.get("snr")
+        location = self.cfg.get("operator_location") or (self.cfg.get("locations") or ["here"])[0]
+        try:
+            text = random.choice(templates).format(
+                name=rec.get("sender", "?"), hops=self.hops_words(hops), via=via, location=location,
+                snr="?" if snr is None else "%+.1f" % snr, me=self.node_name)
+        except (KeyError, IndexError, ValueError):
+            text = "@[%s] got you %s %s here in %s" % (rec.get("sender", "?"), self.hops_words(hops), via, location)
+        return " ".join(text.split())[:160]
 
     async def send_channel(self, idx: int, text: str, kind: str, reply_to=None, beacon_id=None) -> bool:
         if not self.mc:

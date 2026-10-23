@@ -585,6 +585,7 @@ class MeshOmitApp(App):
         Binding("t", "test", "Send Test"),
         Binding("r", "poll", "Poll repeaters"),
         Binding("p", "pause", "Pause/resume bot"),
+        Binding("a", "reply", "Answer last test"),
         Binding("escape", "unfocus", "", show=False),
     ] + [Binding(str(i), "view(%d)" % i, "", show=False) for i in range(1, 10)]
 
@@ -601,6 +602,8 @@ class MeshOmitApp(App):
         self.views: list = [ALL]           # the windows, in list order
         self.view_names: dict = {ALL: "All"}
         self.unread: dict = {}
+        self.last_test: dict | None = None      # the last test call heard, for the operator's reply
+        self.last_from: dict[str, dict] = {}    # last message heard per sender
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -669,8 +672,9 @@ class MeshOmitApp(App):
         self.write_system("*** Type in the box under this feed and press Enter: it goes to the window you are looking "
                           "at (a channel, a room or a <name> private window, which is encrypted). Empty Enter opens the "
                           "big send window with emoticons and quick texts; /help lists the commands.")
-        self.write_system("*** Keys when the box is not focused (press Escape): 1-9 window, m mode, j room, "
-                          "d dashboard, b beacon, t test, r poll, q quit. Click a nick or a <name> for a private window.")
+        self.write_system("*** Keys when the box is not focused (press Escape): 1-9 window, a answer the last test "
+                          "with hops and SNR, m mode, j room, d dashboard, b beacon, t test, r poll, q quit. "
+                          "Click a nick or a <name> for a private window.")
         self.update_sendbar()
         self.query_one("#send_line", Input).focus()
         self.write_system("*** Texts come from %s" % os.path.basename(self.engine.msgs.get("_path", "messages.json")))
@@ -784,6 +788,36 @@ class MeshOmitApp(App):
         else:
             await self.send_to_target(self.current_target(), text)
 
+    def action_reply(self):
+        if self.engine and not isinstance(self.screen, ModalScreen):
+            self.prepare_reply("")
+
+    def prepare_reply(self, name: str = ""):
+        """Put a factual answer in the input line: to the last test call heard, or to the last message of
+        the named station. The operator reads it, edits it and presses Enter."""
+        if name:
+            hits = [n for n in self.last_from if n.lower() == name.lower()] or \
+                   [n for n in self.last_from if name.lower() in n.lower()]
+            rec = self.last_from.get(hits[0]) if hits else None
+            if rec is None:
+                self.write_system("*** Nothing heard from %s since the start." % name)
+                return
+        else:
+            rec = self.last_test
+            if rec is None:
+                self.write_system("*** No test call heard since the start. /reply NAME answers that station's last line.")
+                return
+        vk = self.view_of(rec)
+        if vk in self.views and self.view != vk:
+            self.select_view(vk)
+        inp = self.query_one("#send_line", Input)
+        inp.value = self.engine.operator_reply(rec)
+        inp.cursor_position = len(inp.value)
+        inp.focus()
+        when = time.strftime("%H:%M", time.localtime(rec.get("ts", time.time())))
+        self.write_system("*** Answer to %s (%s, %s) ready in the input line: edit it, Enter sends, Escape and "
+                          "Ctrl+U clear it." % (rec.get("sender"), when, rec.get("channel_name")))
+
     def whois(self, name: str):
         """Type, last advert, position (with a map link) and distance of a contact, from the node's list."""
         info = self.engine.contact_info(name)
@@ -827,11 +861,14 @@ class MeshOmitApp(App):
         cmd = parts[0].lower() if parts else ""
         arg = parts[1].strip() if len(parts) > 1 else ""
         if cmd in ("help", "?"):
-            self.write_system("*** Commands: /bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
+            self.write_system("*** Commands: /reply [NAME] (answer the last test, or NAME's last message, with hops "
+                              "and SNR)  /bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
                               "/msg NAME TEXT  /whois NAME (type, last advert, position, distance)  /join (room)  "
                               "/send (big window)  /dash  /beacon  /test  /poll  /pause  /quit")
         elif cmd in ("whois", "who", "where", "loc") and arg:
             self.whois(arg)
+        elif cmd in ("reply", "re", "answer"):
+            self.prepare_reply(arg)
         elif cmd in ("bot", "op", "operator"):
             want = "bot" if cmd == "bot" else "operator"
             if self.engine.mode != want:
@@ -984,6 +1021,10 @@ class MeshOmitApp(App):
                 extra += ")"
                 line.append(extra, style="#8A8A8A")
 
+        if kind in ("rx", "beacon_reply") and sender != "?":
+            self.last_from[sender] = rec
+            if rec.get("is_trigger"):
+                self.last_test = rec
         vk = self.view_of(rec)
         if vk[0] == "dm" and vk not in self.views:  # a new private window opens by itself
             self.views.append(vk)

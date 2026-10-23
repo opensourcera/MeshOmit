@@ -40,6 +40,7 @@ system pairs (pair the node once in the Bluetooth settings or answer the PIN dia
 | `db` | `"meshomit.sqlite"` | the SQLite file, relative to `config.json` |
 | `messages_file` | `"messages.json"` | the texts file, relative to `config.json` |
 | `locations` | `["Springfield", "Downtown", "Riverside"]` | place names for `{location}`; one at random each time |
+| `operator_location` | `""` | the place named in the operator's `/reply` lines, for example `"Springfield, IL"`; empty takes the first of `locations` |
 | `channels` | `{"0": "Public", "1": "#test"}` | the channel slots the node listens to and their names. Index as on the node (0 to 7). The names are refreshed from the node at start |
 | `start_mode` | `"operator"` | `"bot"` starts answering and beaconing at once; otherwise the program starts as a chat client |
 | `rooms` | `{}` | written by the room window: `{"#mytown": {"creator": "MyNode", "secret": null, "ts": 1760000000}}`; `secret` is the key in hex for private rooms |
@@ -168,6 +169,7 @@ Set both chances to `0` for clean text.
 | `brb` | with `brb_chance` the answer is one of these, after the `@[name]` mention |
 | `mentions` | answers to people who name your node without a test word (`answer_mentions`) |
 | `beacons` | the periodic beacon; random, never the same line twice in a row |
+| `operator_replies` | what `/reply` (key `a`) puts in the input line for you to send by hand; `{via}` is "via Hilltop>Ridge" or "direct". These lines skip the human pass |
 | `quick` | the ready-made lines in the big send window |
 | `emoticons` | the buttons in the big send window |
 

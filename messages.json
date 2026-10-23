@@ -5,7 +5,8 @@
     "picked at random, {hops} 'direct, no repeater' / '3 hops', {snr} and {rssi} of the message we heard,",
     "{greeting} hello/hi/hey/howdy. Lines with {snr} are skipped when the SNR is unknown.",
     "Every line then goes through the human pass from config.json (short words, the odd typo).",
-    "quick: ready-made lines in the send window (Enter key). emoticons: the buttons in the send window."
+    "quick: ready-made lines in the send window (Enter key). emoticons: the buttons in the send window.",
+    "operator_replies: what /reply (key a) puts in the input line for you to send by hand: {name} {hops} {via} (via Repeater>Repeater, or direct) {snr} {location} (operator_location in config.json, else the first of locations). No human pass."
   ],
   "replies": [
     "@[{name}] hi, im in {location}, you?",
@@ -35,6 +36,10 @@
     "@[{name}] hi, yes im here in {location}",
     "@[{name}] hearing you {hops}, {location}",
     "@[{name}] hey, got you here in {location}"
+  ],
+  "operator_replies": [
+    "@[{name}] got you {hops} {via} here in {location}, {snr} dB",
+    "@[{name}] copy, {hops} {via}, {location}"
   ],
   "quick": [
     "Test",

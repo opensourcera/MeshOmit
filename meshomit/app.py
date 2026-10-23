@@ -463,7 +463,6 @@ class DashboardScreen(Screen):
     def refresh_all(self) -> None:
         app: "MeshOmitApp" = self.app  # type: ignore[assignment]
         db = app.db
-        eng = app.engine
         now = int(time.time())
         day = now - 24 * 3600
         s24 = db.stats(day)
@@ -518,10 +517,9 @@ class DashboardScreen(Screen):
                       "-" if snr is None else "%+.1f" % snr, time.strftime("%H:%M", time.localtime(last)))
         t = self.query_one("#t_relays", DataTable)
         t.clear()
-        relays = db.relay_counts(day)
+        relays = app.relays_by_name(db.relay_counts(day))
         total = sum(relays.values()) or 1
-        for h, n in sorted(relays.items(), key=lambda kv: -kv[1])[:12]:
-            name = (eng.hop_name(h) if eng else h) if h else "direct"
+        for name, n in sorted(relays.items(), key=lambda kv: -kv[1])[:12]:
             t.add_row(name, str(n), "%d%%" % (100 * n / total))
         t = self.query_one("#t_hops", DataTable)
         t.clear()
@@ -617,7 +615,7 @@ class MeshOmitApp(App):
                 yield OptionList(id="channels")
                 yield OptionList(id="nicks")
                 yield DataTable(id="repeaters")
-                yield RichLog(id="events", wrap=True, markup=False, highlight=False)
+                yield RichLog(id="events", wrap=True, markup=False, highlight=False, min_width=10)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1095,12 +1093,20 @@ class MeshOmitApp(App):
         txt.append("beacons %d sent, %d replies, next %s\n" % (
             c.get("beacons", 0), c.get("beacon_replies", 0), mmss(d.get("next_beacon"))), style="medium_purple1")
         txt.append("repeater poll in %s\n" % mmss(d.get("next_poll")), style="grey70")
-        relays = d.get("relays_1h") or {}
+        relays = self.relays_by_name(d.get("relays_1h") or {})
         if relays:
-            parts = ["%s %d" % (self.engine.hop_name(h) if h else "direct", n)
-                     for h, n in sorted(relays.items(), key=lambda kv: -kv[1])[:4]]
+            parts = ["%s %d" % (name, n) for name, n in sorted(relays.items(), key=lambda kv: -kv[1])[:4]]
             txt.append("heard via " + ", ".join(parts) + " (1h)", style="grey50")
         self.query_one("#status", Static).update(txt)
+
+    def relays_by_name(self, counts: dict) -> dict:
+        """Packet counts per last hop, merged by repeater name: the 1-byte and 2-byte hash forms of the same
+        repeater are one entry, unknown hashes stay as they are, '' is 'direct'."""
+        out: dict = {}
+        for h, n in counts.items():
+            name = (self.engine.hop_name(h) if self.engine else h) if h else "direct"
+            out[name] = out.get(name, 0) + n
+        return out
 
     def show_repeaters(self, rows: list):
         t = self.query_one("#repeaters", DataTable)

@@ -1,0 +1,9 @@
+meshcore>=2.3
+bleak>=1.0
+textual>=0.80
+rich>=13
+pyserial>=3.5
+winrt-Windows.Devices.Bluetooth; sys_platform == "win32"
+winrt-Windows.Devices.Enumeration; sys_platform == "win32"
+winrt-Windows.Foundation; sys_platform == "win32"
+winrt-Windows.Devices.Radios; sys_platform == "win32"

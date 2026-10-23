@@ -1,0 +1,60 @@
+{
+  "_help": [
+    "Everything the bot says comes from this file. Edit the lists, keep the JSON valid, restart the bot.",
+    "Placeholders: {name} the station we answer, {me} our node name, {location} one of the 'locations' from config.json",
+    "picked at random, {hops} 'direct, no repeater' / '3 hops', {snr} and {rssi} of the message we heard,",
+    "{greeting} hello/hi/hey/howdy. Lines with {snr} are skipped when the SNR is unknown.",
+    "Every line then goes through the human pass from config.json (short words, the odd typo).",
+    "quick: ready-made lines in the send window (Enter key). emoticons: the buttons in the send window."
+  ],
+  "replies": [
+    "@[{name}] hi, im in {location}, you?",
+    "@[{name}] hey, {hops} here in {location}",
+    "@[{name}] hearing you ok, {hops}. how about you?",
+    "@[{name}] hi from {location}, what radio you got?",
+    "@[{name}] got you at {snr} db, nice",
+    "@[{name}] hello, {location} here, you?",
+    "@[{name}] copy, {hops}",
+    "@[{name}] first time hearing you, where are you?"
+  ],
+  "brb": [
+    "brb",
+    "brb..",
+    "back in a bit",
+    "1 min, brb",
+    "brb, call"
+  ],
+  "beacons": [
+    "{greeting} from {location}, anyone around?",
+    "hi all, {me} in {location}, who hears me?",
+    "{location} here, how is the mesh your side?",
+    "anyone out there? {location} calling",
+    "quiet here in {location}.. anyone?"
+  ],
+  "mentions": [
+    "@[{name}] hi, yes im here in {location}",
+    "@[{name}] hearing you {hops}, {location}",
+    "@[{name}] hey, got you here in {location}"
+  ],
+  "quick": [
+    "Test",
+    "hi all, anyone around?",
+    "copy, thanks",
+    "73",
+    "good copy here, how do you hear me?",
+    "who is on tonight?",
+    "where are you? im in Springfield"
+  ],
+  "emoticons": [
+    ":)",
+    ";)",
+    ":D",
+    ":P",
+    ":(",
+    "<3",
+    "o/",
+    "^^",
+    "73",
+    "+1"
+  ]
+}

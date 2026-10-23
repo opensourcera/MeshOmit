@@ -1,0 +1,30 @@
+# Changelog
+
+## 1.0.0 (2026-10-23)
+
+First public release.
+
+- IRC-style screen built with Textual: feed, status, window list, nick list, repeater table, event log.
+- Windows per channel, room and private conversation, with unread counters and a nick list per window.
+- Input line under the feed with a target label, Enter sends to the window being looked at, slash
+  commands (`/w`, `/query`, `/msg`, `/whois`, `/bot`, `/op`, `/join`, `/send`, `/dash`, `/beacon`,
+  `/test`, `/poll`, `/pause`, `/quit`, `/help`).
+- Big send window with a 140-character counter, emoticon buttons and ready-made lines.
+- Names in the feed light up under the mouse; a click opens a private window or types a mention.
+- Operator and Bot modes; the program starts in Operator mode.
+- Bot: answers test calls with lines from `messages.json`, never the same line twice to the same station,
+  per-station and hourly limits, random delay, "brb" now and then, optional answers to mentions, a human
+  pass with short words and the odd typo.
+- Beacons every N minutes with reply counting.
+- Rooms: hashtag rooms and private rooms with a random key, invitations by direct message, one-key join
+  of received invitations, the inviter marked as the room's creator.
+- `/whois`: contact type, last advert, hops, position with a map link, distance and direction.
+- Repeater polling: trace, login, status, neighbour list, all stored.
+- Dashboard with cards, sparklines and tables for the last 24 hours and all time.
+- Connections: Bluetooth LE (Windows pairing with a PIN through the Windows runtime, radio switched on
+  when off), USB serial, TCP.
+- A periodic pull of queued messages, because the node's "messages waiting" push can be missed right
+  after connecting.
+- First-run setup form; `config.json` written for you.
+- Single-file `MeshOmit.exe` build with PyInstaller.
+- SQLite storage in WAL mode.

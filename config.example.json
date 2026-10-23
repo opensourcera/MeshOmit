@@ -1,0 +1,75 @@
+{
+  "_help": [
+    "Copy to config.json, or just start the program and fill in the setup form.",
+    "connection.type: ble (address + pin), serial (port + baud) or tcp (host + port).",
+    "The texts the bot sends live in messages.json. Rules are below under bot and beacon.",
+    "Every key is described in docs/configuration.md."
+  ],
+  "connection": {
+    "type": "ble",
+    "address": "AA:BB:CC:DD:EE:FF",
+    "pin": null,
+    "port": "COM6",
+    "baud": 115200,
+    "host": "192.168.1.50"
+  },
+  "node_name": "",
+  "db": "meshomit.sqlite",
+  "messages_file": "messages.json",
+  "locations": [
+    "Springfield",
+    "Downtown",
+    "Riverside"
+  ],
+  "channels": {
+    "0": "Public",
+    "1": "#test"
+  },
+  "start_mode": "operator",
+  "rooms": {},
+  "bot": {
+    "enabled": true,
+    "reply_channels": [
+      1
+    ],
+    "triggers": [
+      "test",
+      "ping",
+      "radio check",
+      "radio check?"
+    ],
+    "per_sender_minutes": 10,
+    "max_per_hour": 6,
+    "delay_s": [
+      2,
+      6
+    ],
+    "ignore_senders_containing": [
+      "bot"
+    ],
+    "brb_chance": 0.15,
+    "answer_mentions": false
+  },
+  "beacon": {
+    "enabled": true,
+    "channel": 1,
+    "interval_minutes": 10,
+    "first_after_s": 60,
+    "reply_window_minutes": 10
+  },
+  "repeaters": [
+    {
+      "name": "MyRepeater",
+      "pubkey": "64 hex chars",
+      "password_file": "C:/path/to/password.txt",
+      "password_key": null
+    }
+  ],
+  "repeater_poll_minutes": 30,
+  "repeater_first_after_s": 20,
+  "known_prefixes": {},
+  "human": {
+    "slang_chance": 0.7,
+    "typo_chance": 0.35
+  }
+}

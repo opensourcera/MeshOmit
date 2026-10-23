@@ -1,5 +1,7 @@
 # MeshOmit
 
+![MeshOmit in a live session: the feed, windows, nicks, repeaters and events panels](docs/screenshot-session.jpg)
+
 An IRC-style terminal client and test-reply bot for a [MeshCore](https://github.com/ripplebiz/MeshCore)
 companion node, in Python. Connect a Cardputer, T-Deck, Heltec, RAK or any other board running the
 companion firmware over Bluetooth, USB serial or WiFi, and MeshOmit gives you:
@@ -20,23 +22,52 @@ companion firmware over Bluetooth, USB serial or WiFi, and MeshOmit gives you:
 
 Everything the bot says comes from `messages.json`; every rule is in `config.json`. Nothing is hard-coded.
 
-## Quick start
+## Install
+
+### Windows, without Python
+
+1. Download `MeshOmit-1.0.0-windows.zip` from the
+   [releases page](https://github.com/opensourcera/MeshOmit/releases/latest).
+2. Unzip it into a folder of your choice, for example `C:\MeshOmit`. Keep the files together:
+   `MeshOmit.exe`, `messages.json`, `config.example.json`.
+3. Double-click `MeshOmit.exe`. Windows SmartScreen may say "Windows protected your PC" because the
+   file is not signed: click *More info*, then *Run anyway*. Some antivirus programs are wary of
+   PyInstaller executables; the zip's SHA-256 is on the release page if you want to check it.
+4. The program opens in Windows Terminal (Windows 11) with the setup form:
+   - *Bluetooth LE*: press *Scan for devices* and pick your node. The node must be on and must not be
+     connected to a phone, or it stays invisible;
+   - or *USB serial* and the port, or *WiFi / TCP* and the node's address;
+   - a few place names, separated by commas, that the bot may say it is in;
+   - *Save and start*. This writes `config.json` next to the exe.
+5. A Bluetooth node that is not paired yet asks for the six-digit PIN shown on its screen.
+
+On Windows 10 the default console is the old one, which shows no colours: install Windows Terminal from
+the Microsoft Store and open `MeshOmit.exe` from it, or set it as the default terminal.
+
+To update, replace `MeshOmit.exe`; `config.json` and the database stay.
+
+### Linux, macOS, or Windows with Python
 
 Python 3.11 or newer.
 
 ```
+git clone https://github.com/opensourcera/MeshOmit.git
+cd MeshOmit
 pip install -r requirements.txt
-meshomit.cmd          Windows
 ./meshomit.sh         Linux, macOS
+meshomit.cmd          Windows
 ```
 
-The first start opens a setup form: pick Bluetooth (press *Scan for devices*), USB serial or TCP, give a
-few place names, save. The program connects, asks for the Bluetooth PIN shown on the node's screen if the
-node is not paired yet, and shows the channels. It starts in Operator mode; type `/bot` or press `m` to let
-the bot answer tests and send beacons.
+On Linux, Bluetooth needs BlueZ and your user in the `bluetooth` group; serial needs the `dialout`
+group. Pair the node once in the system's Bluetooth settings (or answer the PIN dialog the system opens).
+The first start opens the same setup form.
 
-Windows users can instead download `MeshOmit.exe` from the releases page, put it in a folder next to
-`messages.json` and double-click it.
+### First minutes
+
+The program starts in Operator mode: it listens and shows everything, and says nothing by itself. Type in
+the line under the feed and press Enter to talk on the channel you are looking at. Type `/bot` or press
+`m` to let the bot answer tests and send beacons; `/help` lists the commands. The
+[user guide](docs/user-guide.md) explains the screen.
 
 ## Documentation
 
@@ -69,8 +100,9 @@ ready-made lines, and the dashboard (`d`):
 
 ![The dashboard](docs/screenshot-dashboard.svg)
 
-Every name, call sign and place in these pictures is made up; they are rendered by `tools/screenshot.py`
-from a fake node.
+The picture at the top of this page is a live session on a busy regional mesh (the node's name and
+address are replaced). The four renders above are made by `tools/screenshot.py` from a fake node, and
+every name, call sign and place in them is made up.
 
 ## The screen, panel by panel
 

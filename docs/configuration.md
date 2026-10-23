@@ -42,6 +42,7 @@ system pairs (pair the node once in the Bluetooth settings or answer the PIN dia
 | `locations` | `["Springfield", "Downtown", "Riverside"]` | place names for `{location}`; one at random each time |
 | `operator_location` | `""` | the place named in the operator's `/reply` lines, for example `"Springfield, IL"`; empty takes the first of `locations` |
 | `channels` | `{"0": "Public", "1": "#test"}` | the channel slots the node listens to and their names. Index as on the node (0 to 7). The names are refreshed from the node at start |
+| `contacts` | `{"manual": false}` | `true` puts the node in manual contact mode: it no longer adds every station it hears; adverts wait in `/add` and only the ones you add are kept, with a copy in `contacts.json` next to the config. `/contacts manual on` sets it too |
 | `start_mode` | `"operator"` | `"bot"` starts answering and beaconing at once; otherwise the program starts as a chat client |
 | `rooms` | `{}` | written by the room window: `{"#mytown": {"creator": "MyNode", "secret": null, "ts": 1760000000}}`; `secret` is the key in hex for private rooms |
 | `known_prefixes` | `{}` | names for repeater hashes seen in packet paths, both the 2-byte and 1-byte form: `{"381f": "Hilltop", "38": "Hilltop"}`. Configured repeaters are added by themselves |

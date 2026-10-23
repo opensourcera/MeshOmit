@@ -1069,6 +1069,72 @@ class MeshOmitApp(App):
         self.write_system("*** Answer to %s (%s, %s) ready in the input line: edit it, Enter sends, Escape and "
                           "Ctrl+U clear it." % (rec.get("sender"), when, rec.get("channel_name")))
 
+    async def cmd_add(self, arg: str):
+        if not arg:
+            rows = self.engine.pending_adverts()
+            if not rows:
+                self.write_system("*** No advert waiting. Ask the person to press Advert in their app; it shows up "
+                                  "here within seconds%s." % ("" if self.engine.manual_contacts else
+                                                               " (automatic mode: the node adds them by itself)"))
+                return
+            self.write_system("*** Adverts waiting, /add NAME keeps one (%d):" % len(rows))
+            for c in rows[:20]:
+                kind = self.engine.CONTACT_TYPES.get(c.get("type"), "node")
+                when = c.get("seen") or c.get("last_advert")
+                hops = c.get("out_path_len")
+                self.write_system("      %-24s %-10s %s%s" % (
+                    self.engine.advert_name(c)[:24], kind,
+                    time.strftime("%H:%M", time.localtime(when)) if when else "?",
+                    "" if hops is None or hops < 0 else ("  direct" if hops == 0 else "  %d hops" % hops)))
+            return
+        self.write_system("*** " + await self.engine.add_contact(arg))
+        self.refresh_nicks()
+        self.update_sendbar()
+
+    async def cmd_contacts(self, arg: str):
+        words = arg.split()
+        sub = words[0].lower() if words else ""
+        eng = self.engine
+        if sub == "":
+            n = len(eng.mc.contacts) if eng.mc else 0
+            self.write_system("*** Contacts: %d on the node, %d in contacts.json (yours), %d adverts waiting; %s mode. "
+                              "/contacts export | clear yes | restore | manual on|off" % (
+                                  n, len(eng.my_contacts()), len(eng.pending_adverts()),
+                                  "manual" if eng.manual_contacts else "automatic"))
+        elif sub == "export":
+            try:
+                path, n = await eng.export_contacts()
+                self.write_system("*** %d contacts written to %s" % (n, path))
+            except Exception as e:
+                self.write_system("*** Export failed: %s" % e)
+        elif sub == "clear":
+            if len(words) < 2 or words[1].lower() != "yes":
+                self.write_system("*** This removes every contact from the node (a backup file is written first). "
+                                  "Type /contacts clear yes to do it.")
+                return
+            self.write_system("*** Clearing the node's contact list, this takes a while over Bluetooth...")
+            self.write_system("*** " + await eng.clear_contacts(lambda t: self.write_system("*** " + t)))
+            self.refresh_nicks()
+        elif sub == "restore":
+            self.write_system("*** " + await eng.restore_contacts(lambda t: self.write_system("*** " + t)))
+        elif sub == "manual":
+            on = len(words) < 2 or words[1].lower() in ("on", "yes", "1", "true")
+            self.write_system("*** Contacts " + await eng.set_manual(on))
+            self.save_config_key("contacts", {"manual": on})
+        else:
+            self.write_system("*** /contacts, /contacts export, /contacts clear yes, /contacts restore, "
+                              "/contacts manual on|off")
+
+    def save_config_key(self, key: str, value) -> None:
+        try:
+            with open(self.cfg_path, encoding="utf-8-sig") as f:
+                on_disk = json.load(f)
+            on_disk[key] = value
+            with open(self.cfg_path, "w", encoding="utf-8") as f:
+                json.dump(on_disk, f, indent=2)
+        except (OSError, ValueError):
+            pass
+
     def whois(self, name: str):
         """Type, last advert, position (with a map link) and distance of a contact, from the node's list."""
         info = self.engine.contact_info(name)
@@ -1191,6 +1257,8 @@ class MeshOmitApp(App):
         if cmd in ("help", "?"):
             self.write_system("*** Commands: /reply [NAME] (answer the last test, or NAME's last message, with hops "
                               "and SNR)  /repeaters (battery, drain, best neighbour of each of our repeaters)  "
+                              "/add [NAME] (adverts waiting, or add one as a contact)  /forget NAME  "
+                              "/contacts [export|clear yes|restore|manual on|off]  "
                               "/bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
                               "/msg NAME TEXT  /whois NAME (type, last advert, position, distance)  /join (room)  "
                               "/send (big window)  /dash  /beacon  /test  /poll  /pause  /quit")
@@ -1200,6 +1268,13 @@ class MeshOmitApp(App):
             self.prepare_reply(arg)
         elif cmd in ("repeaters", "rep", "rptr"):
             self.repeaters_report()
+        elif cmd == "add":
+            await self.cmd_add(arg)
+        elif cmd == "forget" and arg:
+            self.write_system("*** " + await self.engine.forget_contact(arg))
+            self.refresh_nicks()
+        elif cmd == "contacts":
+            await self.cmd_contacts(arg)
         elif cmd in ("bot", "op", "operator"):
             want = "bot" if cmd == "bot" else "operator"
             if self.engine.mode != want:

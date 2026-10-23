@@ -32,6 +32,8 @@ class FakeMC:
         self.is_connected = True
         self.sent: list = []            # ("chan", idx, text) | ("dm", key, text) | ("set_channel", idx, name, secret)
         self.node_channels = {0: "Public", 1: "#test"}
+        self.pending_contacts: dict = {}
+        self.manual = False
         fake = self
 
         class Cmds:
@@ -60,7 +62,24 @@ class FakeMC:
             async def get_contacts(self, timeout=None):
                 return _Result()
 
+            async def add_contact(self, contact):
+                fake.sent.append(("add_contact", contact.get("public_key")))
+                return _Result()
+
+            async def remove_contact(self, key):
+                fake.sent.append(("remove_contact", key))
+                return _Result()
+
+            async def set_manual_add_contacts(self, on):
+                fake.manual = on
+                r = _Result()
+                r.is_error = lambda: False
+                return r
+
         self.commands = Cmds()
+
+    def pop_pending_contact(self, key):
+        return self.pending_contacts.pop(key, None)
 
     async def stop_auto_message_fetching(self):
         pass

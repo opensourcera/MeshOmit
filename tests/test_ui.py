@@ -400,3 +400,55 @@ def test_saved_lines():
             assert app.focused is inp and inp.value == "{"
             eng.stop()
     run(body)
+
+
+def test_contacts_manual_add_forget_clear():
+    from fake_node import event as ev
+
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            inp = app.query_one("#send_line", Input)
+            inp.value = "/contacts manual on"
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            assert eng.manual_contacts and eng.mc.manual is True
+            with open(cfg_path, encoding="utf-8") as f:
+                assert json.load(f)["contacts"]["manual"] is True
+            # an advert arrives: it waits instead of being added
+            eng.on_new_contact(ev({"public_key": "77" * 32, "adv_name": "Carol Node", "type": 1, "out_path_len": 2,
+                                   "last_advert": 1, "adv_lat": 0.0, "adv_lon": 0.0, "flags": 0, "out_path": ""}))
+            await pilot.pause(0.2)
+            assert "77" * 32 not in eng.mc.contacts and len(eng.pending_adverts()) == 1
+            inp.value = "/add"
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            assert "Carol Node" in feed_text(app, 3)
+            inp.value = "/add carol"
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            assert "77" * 32 in eng.mc.contacts and eng.mc.sent[-1] == ("add_contact", "77" * 32)
+            with open(os.path.join(tmp, "contacts.json"), encoding="utf-8") as f:
+                assert [c["adv_name"] for c in json.load(f)] == ["Carol Node"]
+            # forget
+            inp.value = "/forget Carol Node"
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            assert "77" * 32 not in eng.mc.contacts and eng.mc.sent[-1] == ("remove_contact", "77" * 32)
+            # export and clear
+            inp.value = "/contacts clear"
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            assert len(eng.mc.contacts) == 2 and "clear yes" in feed_text(app, 3)
+            inp.value = "/contacts clear yes"
+            await pilot.press("enter")
+            await pilot.pause(0.8)
+            assert len(eng.mc.contacts) == 0
+            backups = [f for f in os.listdir(tmp) if f.startswith("contacts-backup-")]
+            assert len(backups) == 1
+            with open(os.path.join(tmp, backups[0]), encoding="utf-8") as f:
+                assert len(json.load(f)) == 2
+            eng.stop()
+    run(body)

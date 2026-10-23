@@ -122,6 +122,7 @@ commands below do everything the keys do, so you rarely need to leave the line.
 | `/whois Name` | what the node knows about a contact (section 8); a part of the name is enough (`/who`, `/where`, `/loc`) |
 | `/reply`, `/reply Name` | answer the last test call (or that station's last message) by hand, see "Answering a test yourself" below |
 | `/repeaters` | battery, drain, trace and best neighbour of each of your repeaters (`/rep`) |
+| `/add`, `/add Name`, `/forget Name`, `/contacts ...` | manage the node's contact list, see "Contacts: who the node knows" |
 | `/bot`, `/op` | switch the bot on or off (`/mode` toggles) |
 | `/join` | opens the room window (section 6) |
 | `/send` | opens the big send window |
@@ -218,6 +219,30 @@ window already shows what they would say. `n` or *New* adds a line (a key of let
 text), `e` or *Edit* changes the highlighted one, Delete removes it, Escape closes. The lines are saved in
 `messages.json` under `snippets`, so they are there next time and you can also edit them in the file.
 Typing `{{tx}}` straight into a message works too.
+
+### Contacts: who the node knows
+
+Private messages, `/whois` and invitations need the other station in your node's contact list. A MeshCore
+node fills that list by itself: every advert it hears becomes a contact, until the table is full (a few
+hundred entries on most boards), after which new people are dropped silently.
+
+If you would rather keep only the people you choose:
+
+| command | what it does |
+|---|---|
+| `/contacts` | how many contacts the node has, how many are yours, how many adverts are waiting, the mode |
+| `/contacts manual on` | the node stops adding stations by itself (saved in `config.json`); `off` goes back |
+| `/add` | the adverts heard since the start, newest first, with type, time and hops |
+| `/add Name` | keeps that station: it goes into the node and into `contacts.json` next to the config |
+| `/forget Name` | removes a contact from the node and from `contacts.json` |
+| `/contacts export` | writes the node's whole list to a dated `contacts-backup-...json` |
+| `/contacts clear yes` | writes that backup, then removes every contact from the node (a minute or two over Bluetooth) |
+| `/contacts restore` | adds everything in `contacts.json` back, after a node reset or on a new node |
+
+The events panel announces every advert ("Advert from K1ABC (companion): /add K1ABC to keep it") in
+manual mode, and every contact the node added by itself in automatic mode. To start clean: `/contacts
+manual on`, then `/contacts clear yes`, then `/add` the people you want as their adverts come in (ask them
+to press Advert in their app).
 
 ## 5. The big send window
 

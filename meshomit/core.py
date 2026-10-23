@@ -198,6 +198,10 @@ class Engine:
         self.pending_cli: dict[str, list] = {}
         self.tasks: set = set()
         self.polling = False
+        # contacts: the node adds everyone it hears unless manual mode is on; then adverts wait for /add
+        self.manual_contacts = bool((cfg.get("contacts") or {}).get("manual", False))
+        self.seen_adverts: dict[str, dict] = {}   # pubkey -> advert (contact dict) waiting for /add
+        self.contacts_busy = False
 
     # ------------------------------------------------------------------ helpers
     def log(self, text: str, level: str = "info"):
@@ -344,7 +348,16 @@ class Engine:
             name = (r.payload or {}).get("channel_name") if r else None
             if name:
                 self.channels[idx] = name
+        if self.manual_contacts:
+            try:
+                r = await mc.commands.set_manual_add_contacts(True)
+                self.log("Contacts: manual mode, the node keeps only who you /add"
+                         if r and not r.is_error() else "Contacts: could not switch the node to manual mode", "ok")
+            except Exception as e:
+                self.log("Contacts: manual mode not set (%s)" % e, "warn")
         mc.set_decrypt_channel_logs(True)
+        mc.subscribe(EventType.NEW_CONTACT, self.on_new_contact)
+        mc.subscribe(EventType.CONTACTS_FULL, self.on_contacts_full)
         mc.subscribe(EventType.RX_LOG_DATA, self.on_rx_log)
         mc.subscribe(EventType.CHANNEL_MSG_RECV, self.on_channel_msg)
         mc.subscribe(EventType.CONTACT_MSG_RECV, self.on_contact_msg)
@@ -472,6 +485,176 @@ class Engine:
         self.ui.message(rec)
 
     # ------------------------------------------------------------------ contacts, DMs, rooms
+    @staticmethod
+    def advert_name(c: dict) -> str:
+        return c.get("adv_name") or (c.get("public_key") or "")[:8]
+
+    def on_new_contact(self, e):
+        """An advert the node reports: added by itself (automatic mode) or waiting for /add (manual mode)."""
+        c = dict(e.payload or {})
+        key = c.get("public_key")
+        if not key:
+            return
+        c["seen"] = int(time.time())
+        name = self.advert_name(c)
+        kind = self.CONTACT_TYPES.get(c.get("type"), "node")
+        if self.manual_contacts:
+            self.seen_adverts[key] = c
+            self.log("Advert from %s (%s): /add %s to keep it" % (name, kind, name), "ok")
+        else:
+            if self.mc:
+                self.mc.contacts[key] = c
+            self.log("New contact: %s (%s)" % (name, kind), "ok")
+
+    def on_contacts_full(self, e):
+        self.log("The node's contact table is full: /contacts clear yes, or /forget NAME, to make room", "warn")
+
+    def contacts_path(self, name: str = "contacts.json") -> str:
+        return os.path.join(os.path.dirname(os.path.abspath(self.cfg_path or "config.json")), name)
+
+    def my_contacts(self) -> list:
+        """The contacts you added yourself, kept in contacts.json next to the config."""
+        p = self.contacts_path()
+        if os.path.exists(p):
+            with open(p, encoding="utf-8-sig") as f:
+                return json.load(f)
+        return []
+
+    def save_my_contacts(self, rows: list) -> None:
+        with open(self.contacts_path(), "w", encoding="utf-8") as f:
+            json.dump(rows, f, indent=1, ensure_ascii=False, default=str)
+
+    def pending_adverts(self) -> list:
+        """Adverts waiting for /add, newest first: the library's pending list plus the ones seen here."""
+        rows = dict(self.seen_adverts)
+        if self.mc:
+            for k, c in (getattr(self.mc, "pending_contacts", None) or {}).items():
+                rows.setdefault(k, dict(c))
+        return sorted(rows.values(), key=lambda c: -(c.get("seen") or c.get("last_advert") or 0))
+
+    def find_advert(self, name: str) -> dict | None:
+        want = name.lower().strip()
+        rows = self.pending_adverts()
+        hits = [c for c in rows if self.advert_name(c).lower() == want] or \
+               [c for c in rows if want in self.advert_name(c).lower()]
+        return hits[0] if hits else None
+
+    async def export_contacts(self) -> tuple[str, int]:
+        """A dated backup of the node's whole contact list, next to the config."""
+        if not self.mc:
+            raise ConnectionError("not connected")
+        rows = [dict(c, public_key=k) for k, c in self.mc.contacts.items()]
+        p = self.contacts_path("contacts-backup-%s.json" % time.strftime("%Y%m%d-%H%M"))
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(rows, f, indent=1, ensure_ascii=False, default=str)
+        return p, len(rows)
+
+    async def add_contact(self, name: str) -> str:
+        c = self.find_advert(name)
+        if not c:
+            return "no advert from %s seen yet: ask them to press Advert, or /add with no name for the list" % name
+        if not self.mc:
+            return "not connected"
+        async with self.cmd_lock:
+            r = await self.mc.commands.add_contact({k: v for k, v in c.items() if k != "seen"})
+        if not r or r.type.name == "ERROR":
+            return "the node refused the contact (table full?)"
+        key = c["public_key"]
+        self.mc.contacts[key] = c
+        self.seen_adverts.pop(key, None)
+        try:
+            self.mc.pop_pending_contact(key)
+        except Exception:
+            pass
+        mine = [m for m in self.my_contacts() if m.get("public_key") != key] + [c]
+        self.save_my_contacts(mine)
+        self.contacts_loaded = True
+        self.log("Contact added: %s" % self.advert_name(c), "ok")
+        return "%s added (%d contacts on the node, %d in contacts.json)" % (self.advert_name(c), len(self.mc.contacts), len(mine))
+
+    async def forget_contact(self, name: str) -> str:
+        if not self.mc:
+            return "not connected"
+        hits = [(k, c) for k, c in self.mc.contacts.items() if (c.get("adv_name") or "").lower() == name.lower().strip()]
+        if not hits:
+            return "no contact named %s" % name
+        key, c = hits[0]
+        async with self.cmd_lock:
+            r = await self.mc.commands.remove_contact(key)
+        if not r or r.type.name == "ERROR":
+            return "the node refused to remove %s" % name
+        self.mc.contacts.pop(key, None)
+        self.save_my_contacts([m for m in self.my_contacts() if m.get("public_key") != key])
+        self.log("Contact removed: %s" % name, "ok")
+        return "%s removed (%d contacts on the node)" % (name, len(self.mc.contacts))
+
+    async def clear_contacts(self, progress) -> str:
+        """Back the list up, then remove every contact from the node. progress(text) reports along the way."""
+        if not self.mc:
+            return "not connected"
+        if self.contacts_busy:
+            return "already working on the contact list"
+        self.contacts_busy = True
+        try:
+            path, n = await self.export_contacts()
+            progress("Backup of %d contacts written to %s" % (n, os.path.basename(path)))
+            keys = list(self.mc.contacts)
+            done = failed = 0
+            for i, key in enumerate(keys, 1):
+                if not self.mc:
+                    break
+                async with self.cmd_lock:
+                    try:
+                        r = await self.mc.commands.remove_contact(key)
+                        ok = bool(r) and r.type.name != "ERROR"
+                    except Exception:
+                        ok = False
+                if ok:
+                    done += 1
+                    self.mc.contacts.pop(key, None)
+                else:
+                    failed += 1
+                if i % 25 == 0:
+                    progress("Removing contacts: %d of %d" % (i, len(keys)))
+            self.contacts_loaded = bool(self.mc and self.mc.contacts)
+            self.log("Contacts cleared: %d removed, %d refused" % (done, failed), "ok")
+            return "%d contacts removed, %d refused; backup in %s" % (done, failed, os.path.basename(path))
+        finally:
+            self.contacts_busy = False
+
+    async def restore_contacts(self, progress) -> str:
+        """Add every contact of contacts.json back to the node (after a reset, or on another node)."""
+        if not self.mc:
+            return "not connected"
+        mine = self.my_contacts()
+        done = 0
+        for c in mine:
+            async with self.cmd_lock:
+                try:
+                    r = await self.mc.commands.add_contact({k: v for k, v in c.items() if k != "seen"})
+                    ok = bool(r) and r.type.name != "ERROR"
+                except Exception:
+                    ok = False
+            if ok:
+                done += 1
+                self.mc.contacts[c["public_key"]] = c
+        self.contacts_loaded = bool(self.mc.contacts)
+        return "%d of %d contacts from contacts.json are on the node" % (done, len(mine))
+
+    async def set_manual(self, on: bool) -> str:
+        self.manual_contacts = on
+        self.cfg.setdefault("contacts", {})["manual"] = on
+        if self.mc:
+            async with self.cmd_lock:
+                try:
+                    r = await self.mc.commands.set_manual_add_contacts(on)
+                    if not r or r.is_error():
+                        return "the node did not accept the setting"
+                except Exception as e:
+                    return "could not set it: %s" % e
+        return ("manual: the node keeps only who you /add; adverts wait in /add" if on
+                else "automatic: the node adds everyone it hears")
+
     async def load_contacts(self):
         """Fetch the node's contact list once (slow over Bluetooth with many contacts) so DMs show names
         and the operator can pick people by name."""

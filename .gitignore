@@ -9,3 +9,5 @@ dist/
 *.spec
 build.log
 LOG-*.md
+contacts.json
+contacts-backup-*.json

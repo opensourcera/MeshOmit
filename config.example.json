@@ -26,6 +26,9 @@
     "0": "Public",
     "1": "#test"
   },
+  "contacts": {
+    "manual": false
+  },
   "start_mode": "operator",
   "rooms": {},
   "bot": {

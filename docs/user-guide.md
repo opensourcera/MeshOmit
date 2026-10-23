@@ -198,6 +198,22 @@ Which station the fields refer to: the one you address with `@[name]` at the sta
 its last message; without a mention, the last message received in the window you are looking at; failing
 that, the last test call heard. A `{word}` that is not a field is sent as typed.
 
+### Saved lines: `{{`
+
+Type `{` twice and a window with your saved lines opens: short keys for things you say often.
+
+```
+{{hop}}   {hops} {via} from {location}, hope the nodes are holding up   -> 3 hops via Hilltop>Ridge from Springfield, ...
+{{tx}}    thank you
+{{hw}}    how is everything?
+```
+
+Enter (or *Insert*) puts the line in your message; fields inside it are filled in when you send, and the
+window already shows what they would say. `n` or *New* adds a line (a key of letters and digits, and the
+text), `e` or *Edit* changes the highlighted one, Delete removes it, Escape closes. The lines are saved in
+`messages.json` under `snippets`, so they are there next time and you can also edit them in the file.
+Typing `{{tx}}` straight into a message works too.
+
 ## 5. The big send window
 
 Enter on an empty input line, `/send`, or the *Enter* key when the input line is not focused. It is a

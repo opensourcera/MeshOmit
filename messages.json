@@ -6,7 +6,8 @@
     "{greeting} hello/hi/hey/howdy. Lines with {snr} are skipped when the SNR is unknown.",
     "Every line then goes through the human pass from config.json (short words, the odd typo).",
     "quick: ready-made lines in the send window (Enter key). emoticons: the buttons in the send window.",
-    "operator_replies: what /reply (key a) puts in the input line for you to send by hand: {name} {hops} {via} (via Repeater>Repeater, or direct) {snr} {location} (operator_location in config.json, else the first of locations). No human pass."
+    "operator_replies: what /reply (key a) puts in the input line for you to send by hand: {name} {hops} {via} (via Repeater>Repeater, or direct) {snr} {location} (operator_location in config.json, else the first of locations). No human pass.",
+    "snippets: your saved lines. {{key}} in a message, or the window that opens when you type {{ (add, edit and delete them there). Fields like {hops} are allowed inside."
   ],
   "replies": [
     "@[{name}] hi, im in {location}, you?",
@@ -61,5 +62,10 @@
     "^^",
     "73",
     "+1"
-  ]
+  ],
+  "snippets": {
+    "hop": "{hops} {via} from {location}, hope the nodes are holding up",
+    "tx": "thank you",
+    "hw": "how is everything?"
+  }
 }

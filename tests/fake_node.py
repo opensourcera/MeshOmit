@@ -3,6 +3,7 @@ everything the program would have sent. Enough for the screen and the engine's b
 import asyncio
 import json
 import os
+import shutil
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -88,7 +89,8 @@ def make_config(tmp_dir: str, channels=None, beacon_channel=1) -> str:
         cfg = json.load(f)
     cfg["connection"] = {"type": "tcp", "host": "127.0.0.1", "port": 1}
     cfg["db"] = os.path.join(tmp_dir, "test.sqlite")
-    cfg["messages_file"] = os.path.join(ROOT, "messages.json")
+    shutil.copy(os.path.join(ROOT, "messages.json"), os.path.join(tmp_dir, "messages.json"))
+    cfg["messages_file"] = "messages.json"
     cfg["beacon"]["enabled"] = False
     cfg["beacon"]["channel"] = beacon_channel
     cfg["repeaters"] = []

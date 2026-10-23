@@ -171,6 +171,7 @@ Set both chances to `0` for clean text.
 | `beacons` | the periodic beacon; random, never the same line twice in a row |
 | `operator_replies` | what `/reply` (key `a`) puts in the input line for you to send by hand; `{via}` is "via Hilltop>Ridge" or "direct". These lines skip the human pass |
 | `quick` | the ready-made lines in the big send window |
+| `snippets` | an object, not a list: your saved lines by key, `{"tx": "thank you"}`. `{{tx}}` in a message, or the window that opens on `{{`, which also edits them |
 | `emoticons` | the buttons in the big send window |
 
 Placeholders, filled in before the human pass:

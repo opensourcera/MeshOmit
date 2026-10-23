@@ -24,6 +24,8 @@ First public release, as a beta.
 - Fields in typed messages: `{` opens a list of `{hops}`, `{via}`, `{snr}`, `{rssi}`, `{heard}`,
   `{location}`, `{time}`, `{name}`, `{me}`, filled in when the message is sent for the station addressed.
   The same list offers the emoticons, shown as pictures and inserted as text.
+- Saved lines: `{{` opens a window of your own short texts (`{{tx}}` thank you, ...), with fields allowed
+  inside, added, edited and deleted in place and kept in `messages.json`.
 - Repeater polling: trace, login, status, neighbour list, all stored.
 - Dashboard with cards, sparklines and tables for the last 24 hours and all time.
 - Connections: Bluetooth LE (Windows pairing with a PIN through the Windows runtime, radio switched on

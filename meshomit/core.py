@@ -58,13 +58,19 @@ DEFAULT_MESSAGES = {
         "who is on tonight?",
     ],
     "emoticons": [":)", ";)", ":D", ":P", ":(", "<3", "o/", "^^", "73", "+1"],
+    # saved lines: {{key}} in a typed message, or the window that opens on {{ ; fields allowed inside
+    "snippets": {
+        "hop": "{hops} {via} from {location}, hope the nodes are holding up",
+        "tx": "thank you",
+        "hw": "how is everything?",
+    },
 }
 
 
 def load_messages(cfg: dict, cfg_path: str | None) -> dict:
     """The text lists: messages.json next to the config (or cfg["messages_file"]), else the lists that may
     still sit in config.json (older layout), else the built-in defaults."""
-    msgs = {k: list(v) for k, v in DEFAULT_MESSAGES.items()}
+    msgs = {k: (dict(v) if isinstance(v, dict) else list(v)) for k, v in DEFAULT_MESSAGES.items()}
     for k, src in (("replies", cfg.get("bot", {}).get("replies")), ("brb", cfg.get("bot", {}).get("brb")),
                    ("beacons", cfg.get("beacon", {}).get("messages"))):
         if src:
@@ -82,8 +88,30 @@ def load_messages(cfg: dict, cfg_path: str | None) -> dict:
         for k in msgs:
             if isinstance(data.get(k), list) and data[k]:
                 msgs[k] = [str(x) for x in data[k]]
+        if isinstance(data.get("snippets"), dict):
+            msgs["snippets"] = {str(k): str(v) for k, v in data["snippets"].items()}
     msgs["_path"] = path
     return msgs
+
+
+def save_snippets(msgs: dict, cfg_path: str | None, snippets: dict) -> str:
+    """Write the saved lines back into messages.json (the one next to the config when the loaded one is the
+    copy bundled in the exe). The other lists in the file are kept as they are. Returns the path written."""
+    path = msgs.get("_path") or "messages.json"
+    bundled = getattr(sys, "_MEIPASS", None)
+    if bundled and os.path.abspath(path).startswith(os.path.abspath(bundled)):
+        path = os.path.join(os.path.dirname(os.path.abspath(cfg_path or "config.json")), "messages.json")
+    data = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8-sig") as f:
+            data = json.load(f)
+    data["snippets"] = dict(snippets)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    msgs["snippets"] = dict(snippets)
+    msgs["_path"] = path
+    return path
 
 
 def read_password(path: str, key: str | None) -> str:
@@ -115,6 +143,7 @@ class Engine:
         self.cfg = cfg
         self.db = db
         self.ui = ui
+        self.cfg_path = cfg_path
         self.mc = None
         self.conn_cfg = cfg.get("connection") or {"type": "ble", "address": cfg.get("device", {}).get("address")}
         self.pin = self.conn_cfg.get("pin") or cfg.get("pin")
@@ -737,6 +766,9 @@ class Engine:
                      "warn")
             text = "@[%s] %s, %s here" % (sender, self.greeting(), self.place())
         return self.humanize(text)[:160]
+
+    def save_snippets(self, snippets: dict) -> str:
+        return save_snippets(self.msgs, self.cfg_path, snippets)
 
     def operator_reply(self, rec: dict) -> str:
         """A factual answer for the operator to send by hand: who, hops, the repeaters, SNR, where we are.

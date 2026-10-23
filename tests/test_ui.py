@@ -345,3 +345,58 @@ def test_fields_in_typed_messages():
             assert inp.value == "snr is {"
             eng.stop()
     run(body)
+
+
+def test_saved_lines():
+    from meshomit.app import FieldScreen, SnippetEditScreen, SnippetScreen
+
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            inp = app.query_one("#send_line", Input)
+            eng.on_channel_msg(channel_msg(1, "K1ABC", "Test", hops=2, snr=7.5))
+            await pilot.pause(0.3)
+            # {{key}} typed by hand expands, with the fields inside it
+            inp.value = "@[K1ABC] {{tx}}, {{hop}} {{nosuch}}"
+            await pilot.press("enter")
+            await pilot.pause(0.4)
+            sent = eng.mc.sent[-1][2]
+            assert sent.startswith("@[K1ABC] thank you, 2 hops ? from Springfield") and sent.endswith("{{nosuch}}"), sent
+            # { { opens the saved lines; Enter inserts the highlighted one
+            inp.value = "@[K1ABC] "
+            inp.cursor_position = len(inp.value)
+            await pilot.press("left_curly_bracket")
+            await pilot.pause(0.4)
+            assert isinstance(app.screen, FieldScreen)
+            await pilot.press("left_curly_bracket")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, SnippetScreen), type(app.screen).__name__
+            await pilot.press("down", "enter")
+            await pilot.pause(0.4)
+            assert inp.value == "@[K1ABC] thank you ", inp.value
+            # a new saved line through the window, kept in messages.json
+            inp.value = "{"
+            inp.cursor_position = 1
+            await pilot.pause(0.4)
+            await pilot.press("left_curly_bracket")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, SnippetScreen)
+            await pilot.press("n")
+            await pilot.pause(0.4)
+            assert isinstance(app.screen, SnippetEditScreen)
+            app.screen.query_one("#snip_key", Input).value = "gn"
+            app.screen.query_one("#snip_text", Input).value = "good night from {location}"
+            await pilot.click("#snip_save")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, SnippetScreen)
+            assert eng.msgs["snippets"]["gn"] == "good night from {location}"
+            with open(os.path.join(tmp, "messages.json"), encoding="utf-8") as f:
+                saved = json.load(f)
+            assert saved["snippets"]["gn"] == "good night from {location}" and saved["quick"]
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            assert app.focused is inp and inp.value == "{"
+            eng.stop()
+    run(body)

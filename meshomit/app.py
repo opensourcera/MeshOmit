@@ -47,6 +47,14 @@ Footer { background: #1a1a4a; }
 #events { height: 1fr; background: #000000; border: round #a08020; padding: 0 1; }
 #pin_box { width: 60; height: auto; border: thick #4040a0; background: #101030; padding: 1 2; }
 FieldScreen { align: left bottom; }
+SnippetScreen { align: left bottom; }
+#snip_box { width: 110; height: auto; max-height: 20; border: round #C8A2C8; background: #101020; margin: 0 0 2 1; }
+#snip_box Label { color: #C8A2C8; padding: 0 1; }
+#snips { height: auto; max-height: 12; background: #101020; }
+#snip_box Button { min-width: 10; margin: 0 1; }
+#snip_edit { width: 110; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
+#snip_edit Label.h { color: #C8A2C8; text-style: bold; }
+#snip_edit Input { margin-bottom: 1; }
 #field_box { width: 70; height: auto; max-height: 16; border: round #C8A2C8; background: #101020; margin: 0 0 2 1; }
 #field_box Label { color: #C8A2C8; padding: 0 1; }
 #fields { height: auto; max-height: 12; background: #101020; }
@@ -291,16 +299,20 @@ class FieldScreen(ModalScreen[str]):
     """The list that opens on `{`: a field (filled in when the message is sent) or an emoticon. Emoticons are
     shown as the picture they stand for and inserted as the text form, which every mesh device can show."""
 
-    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+    BINDINGS = [Binding("escape", "cancel", "Cancel"), Binding("left_curly_bracket", "snippets", "Saved lines")]
 
     def __init__(self, values: dict, emoticons: list | None = None):
         super().__init__()
         self.values = values
         self.emoticons = emoticons or []
 
+    def action_snippets(self) -> None:
+        self.dismiss("snippets")
+
     def compose(self) -> ComposeResult:
         with Vertical(id="field_box"):
-            yield Label("Fields are filled in when you send; emoticons go in as text (Enter picks, Escape closes):")
+            yield Label("Fields are filled in when you send; emoticons go in as text. Enter picks, Escape closes, "
+                        "{ again opens your saved lines.")
             lst = OptionList(id="fields")
             for key, what in FIELDS:
                 t = Text("{%s}" % key, style="bold #FFFF00")
@@ -326,6 +338,178 @@ class FieldScreen(ModalScreen[str]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class SnippetEditScreen(ModalScreen[tuple]):
+    """Add or change one saved line: a short key and the text (fields like {hops} allowed)."""
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, key: str = "", text: str = ""):
+        super().__init__()
+        self.key, self.text = key, text
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="snip_edit"):
+            yield Label("Saved line" if self.key else "New saved line", classes="h")
+            yield Label("Key, letters and digits (you type {{key}} or pick it from the list):")
+            yield Input(value=self.key, placeholder="hop", max_length=16, id="snip_key")
+            yield Label("Text; fields {hops} {via} {snr} {location} {time} {name} are filled in when you send:")
+            yield Input(value=self.text, placeholder="{hops} {via} from {location}, hope the nodes are holding up",
+                        max_length=200, id="snip_text")
+            yield Label("", id="snip_msg")
+            with Horizontal():
+                yield Button("Save", variant="success", id="snip_save")
+                yield Button("Cancel", id="snip_cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#snip_key" if not self.key else "#snip_text", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "snip_key":
+            self.query_one("#snip_text", Input).focus()
+        else:
+            self.save()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "snip_save":
+            self.save()
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def save(self) -> None:
+        key = self.query_one("#snip_key", Input).value.strip()
+        text = self.query_one("#snip_text", Input).value.strip()
+        if not re.fullmatch(r"\w+", key):
+            self.query_one("#snip_msg", Label).update("The key must be one word of letters and digits.")
+            return
+        if not text:
+            self.query_one("#snip_msg", Label).update("Give the line a text.")
+            return
+        self.dismiss((key, text))
+
+
+class SnippetScreen(ModalScreen[str]):
+    """The window that opens on {{: your saved lines. Enter inserts one; they can be added, changed and deleted
+    here and are kept in messages.json."""
+
+    BINDINGS = [Binding("escape", "cancel", "Close"), Binding("n", "new", "New"), Binding("e", "edit", "Edit"),
+                Binding("delete", "delete", "Delete")]
+
+    def __init__(self, engine, preview):
+        super().__init__()
+        self.engine = engine
+        self.preview = preview  # function(text) -> text with the fields filled in, for the list
+        self.msg = ""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="snip_box"):
+            yield Label("Saved lines, {{key}} in a message: Enter inserts, n new, e edit, Delete removes, Escape closes.")
+            yield OptionList(id="snips")
+            yield Label("", id="snip_status")
+            with Horizontal():
+                yield Button("Insert", variant="success", id="snip_insert")
+                yield Button("New", id="snip_new")
+                yield Button("Edit", id="snip_edit_btn")
+                yield Button("Delete", id="snip_delete")
+                yield Button("Close", id="snip_close")
+
+    def on_mount(self) -> None:
+        self.fill()
+        self.query_one("#snips", OptionList).focus()
+
+    def fill(self, select: str | None = None) -> None:
+        lst = self.query_one("#snips", OptionList)
+        lst.clear_options()
+        snips = self.engine.msgs.get("snippets") or {}
+        keys = list(snips)
+        for key in keys:
+            t = Text("{{%s}}" % key, style="bold #FFFF00")
+            t.append("  " + snips[key][:60], style="#FFFFFF")
+            try:
+                shown = self.preview(snips[key])
+            except Exception:
+                shown = snips[key]
+            if shown != snips[key]:
+                t.append("  -> " + shown[:60], style="#80FF80")
+            lst.add_option(Option(t, id="snip:" + key))
+        if not keys:
+            lst.add_option(Option(Text("no saved lines yet: press n or New", style="grey50"), disabled=True))
+        elif select in keys:
+            lst.highlighted = keys.index(select)
+        else:
+            lst.highlighted = 0
+        self.query_one("#snip_status", Label).update(self.msg)
+
+    def current_key(self) -> str | None:
+        lst = self.query_one("#snips", OptionList)
+        if lst.highlighted is None:
+            return None
+        opt = lst.get_option_at_index(lst.highlighted)
+        return opt.id[5:] if opt.id and opt.id.startswith("snip:") else None
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option.id and event.option.id.startswith("snip:"):
+            self.dismiss(event.option.id)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        b = event.button.id
+        if b == "snip_insert":
+            key = self.current_key()
+            if key:
+                self.dismiss("snip:" + key)
+        elif b == "snip_new":
+            self.action_new()
+        elif b == "snip_edit_btn":
+            self.action_edit()
+        elif b == "snip_delete":
+            self.action_delete()
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def action_new(self) -> None:
+        self.app.push_screen(SnippetEditScreen(), callback=lambda r: self.store(None, r))
+
+    def action_edit(self) -> None:
+        key = self.current_key()
+        if key:
+            self.app.push_screen(SnippetEditScreen(key, self.engine.msgs["snippets"][key]),
+                                 callback=lambda r: self.store(key, r))
+
+    def action_delete(self) -> None:
+        key = self.current_key()
+        if key:
+            snips = dict(self.engine.msgs.get("snippets") or {})
+            snips.pop(key, None)
+            self.write(snips, "Removed {{%s}}." % key)
+            self.fill()
+
+    def store(self, old_key: str | None, result) -> None:
+        if not result:
+            self.query_one("#snips", OptionList).focus()
+            return
+        key, text = result
+        snips = dict(self.engine.msgs.get("snippets") or {})
+        if old_key and old_key != key:
+            snips.pop(old_key, None)
+        snips[key] = text
+        self.write(snips, "Saved {{%s}}." % key)
+        self.fill(key)
+        self.query_one("#snips", OptionList).focus()
+
+    def write(self, snips: dict, note: str) -> None:
+        try:
+            path = self.engine.save_snippets(snips)
+            self.msg = "%s  (%s)" % (note, os.path.basename(path))
+        except OSError as e:
+            self.engine.msgs["snippets"] = snips
+            self.msg = "%s  Could not write messages.json: %s" % (note, e)
 
 
 class SendScreen(ModalScreen[dict]):
@@ -739,7 +923,8 @@ class MeshOmitApp(App):
                           "at (a channel, a room or a <name> private window, which is encrypted). Empty Enter opens the "
                           "big send window with emoticons and quick texts; /help lists the commands.")
         self.write_system("*** Type { in a message for a list of fields: {hops} {via} {snr} {location} {time}... "
-                          "They are filled in when you send, for the station you address with @[name].")
+                          "They are filled in when you send, for the station you address with @[name]. "
+                          "Type {{ for your saved lines (add and edit them there).")
         self.write_system("*** Keys when the box is not focused (press Escape): 1-9 window, a answer the last test "
                           "with hops and SNR, m mode, j room, d dashboard, b beacon, t test, r poll, q quit. "
                           "Click a nick or a <name> for a private window.")
@@ -946,11 +1131,14 @@ class MeshOmitApp(App):
         }
 
     def expand_fields(self, text: str) -> str:
-        """Replace {hops}, {via}, {snr}... in a typed message. Unknown names are left as typed."""
+        """Replace {{key}} with the saved line, then {hops}, {via}, {snr}... with their values. Unknown names
+        are left as typed."""
         if "{" not in text:
             return text
+        snips = (self.engine.msgs.get("snippets") if self.engine else None) or {}
+        text = re.sub(r"\{\{(\w+)\}\}", lambda m: snips.get(m.group(1), m.group(0)), text)
         values = self.field_values(text)
-        return re.sub(r"\{(\w+)\}", lambda m: str(values.get(m.group(1), m.group(0))), text)
+        return re.sub(r"(?<!\{)\{(\w+)\}(?!\})", lambda m: str(values.get(m.group(1), m.group(0))), text)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id not in ("send_line", "send_text") or self.picking or not self.engine:
@@ -969,9 +1157,20 @@ class MeshOmitApp(App):
                                                              self.engine.msgs.get("emoticons", [])))
         finally:
             self.picking = False
+        if picked == "snippets":  # { typed twice: the saved lines
+            self.picking = True
+            try:
+                picked = await self.push_screen_wait(SnippetScreen(self.engine, self.expand_fields))
+            finally:
+                self.picking = False
         if picked and inp.value[idx:idx + 1] == "{":
             kind, _, what = picked.partition(":")
-            ins = "{%s}" % what if kind == "field" else what + " "  # an emoticon replaces the brace
+            if kind == "field":
+                ins = "{%s}" % what
+            elif kind == "snip":
+                ins = (self.engine.msgs.get("snippets") or {}).get(what, "") + " "
+            else:
+                ins = what + " "  # an emoticon replaces the brace
             inp.value = inp.value[:idx] + ins + inp.value[idx + 1:]
             inp.cursor_position = idx + len(ins)
         inp.focus()

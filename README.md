@@ -72,6 +72,74 @@ ready-made lines, and the dashboard (`d`):
 Every name, call sign and place in these pictures is made up; they are rendered by `tools/screenshot.py`
 from a fake node.
 
+## The screen, panel by panel
+
+| panel | what it shows |
+|---|---|
+| **Title bar** | your node's name and the mode, OPERATOR or BOT, with the clock |
+| **Feed** (left, large) | one line per message: time, channel, `<sender>`, text, then hops, SNR and the last repeaters it came through, like "(3h +5.5dB via Hilltop>Ridge)". Its title is the window you are looking at |
+| **Input line** (under the feed) | where you type. The label in front names where Enter sends: a channel, a room, or `<name>` for a private message. Slash commands start with `/`, `/help` lists them |
+| **Status** (top right) | link state and uptime, mode, number of contacts on the node, messages and tests heard, answers given, beacons sent and replied to, time to the next beacon and the next repeater poll, which repeaters carried the traffic in the last hour |
+| **Windows (1-9)** | one entry per channel, room and private conversation, with unread counts; the number in front selects it. A room shows its creator after `*` |
+| **Nicks (last 3 h)** | who spoke in the selected window, most recent first, with hops ("direct", "2h"), distance and direction when both nodes advertise a position, and how many messages |
+| **Repeaters** | the last poll of each configured repeater: battery, uptime in hours, noise floor, trace SNR there/back |
+| **Events** | what the program did and why: connection steps, contacts loaded, beacons, why the bot stayed quiet, invitations, repeater results |
+| **Footer** | the single-key shortcuts (they work when the input line is not focused; press Escape) |
+
+Everything is clickable: windows, nicks, names in the feed, buttons and lists in the dialogs.
+
+## What the colours mean
+
+| colour | meaning |
+|---|---|
+| **lilac frame and title bar** | Operator mode: you chat, the bot is silent |
+| **blue frame and title bar** | Bot mode: the bot answers tests and sends beacons |
+| **one colour per `<name>`** | each station keeps its colour everywhere (feed, nick list, dashboard), derived from its name |
+| white text | a message received on a channel |
+| dimmed grey text | a message that was queued on the node before the program started; never answered |
+| **yellow text** | a test call ("Test", "ping", "radio check") the bot answers in Bot mode |
+| black on yellow | someone named your node with `@[YourNode]`, or replied to your beacon |
+| purple `* YourNode ...` | a beacon your bot sent |
+| bright white `<YourNode>` | your own messages and the bot's answers |
+| black on lilac | a direct message received: encrypted, only you can read it |
+| lilac `-> name:` | a direct message you sent |
+| green `***` | lines from the program itself (keys, room created, who invited you) |
+| grey `(3h +5.5dB via ...)` | hops, SNR and repeaters of the strongest copy heard |
+| gold `*name` | the creator of a room, in the window list and at the head of its nick list |
+| orange / green / yellow in the Events panel | problems / things that worked / plain progress |
+
+## What the bot does
+
+In Bot mode (`m` or `/bot`) the program behaves like a patient person sitting at the node:
+
+1. It listens on every channel the node has (Public, #test, your rooms) and shows and stores everything.
+2. When a message on a reply channel (by default only #test, so Public stays clean) is exactly a test word
+   ("test", "ping", "radio check", the list is yours), it is a test call.
+3. It stays quiet if the sender's name contains "bot", if it answered that station less than 10 minutes
+   ago, if it already gave 6 answers in the last hour, or if the message was queued on the node before
+   the program started. The Events panel says which rule applied.
+4. Otherwise it waits a random 2 to 6 seconds, so it does not collide with other bots and does not look
+   like a machine.
+5. It picks a line from `messages.json` that this station has not received yet, in random order, and
+   starts again only when the station has had them all. Lines quoting the SNR are skipped when the SNR is
+   unknown. Now and then (15 %) it just says "brb" instead.
+6. It fills the blanks: the station's name as a mention (`@[name]`, highlighted in the MeshCore apps),
+   one of your place names at random, the hop count, the SNR.
+7. The line goes through the human pass: "you" becomes "u", "thanks" becomes "thx", one word may get a
+   slip of the finger, the final full stop goes. Both chances are yours to set, 0 for clean text.
+8. It sends the answer on the channel the test came from and stores it with a link to the test.
+9. Every 10 minutes it sends a beacon from your list ("hi all, MyNode in Springfield, who hears me?"),
+   never the same line twice in a row, and counts every message that names it in the next 10 minutes as a
+   reply to that beacon. The dashboard shows the hit rate.
+10. Optionally (`answer_mentions`) it also answers people who name it without a test word, from a
+    separate list of lines.
+11. Every 30 minutes it logs in to your repeaters, records battery, uptime, noise floor, counters, a
+    trace SNR and the neighbour list. This runs in Operator mode too.
+
+In Operator mode it does 1 and 11 only, and you do the talking. `p` pauses the answers without leaving
+Bot mode. Everything the bot says is in `messages.json`; every limit is in `config.json`
+(see [docs/configuration.md](docs/configuration.md)).
+
 ## Files
 
 ```

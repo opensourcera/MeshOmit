@@ -108,6 +108,17 @@ The picture at the top of this page is a live session on a busy regional mesh (t
 address are replaced). The four renders above are made by `tools/screenshot.py` from a fake node, and
 every name, call sign and place in them is made up.
 
+## Video: a tour in two and a half minutes
+
+A live session recorded on a busy regional mesh: the bot answering tests in Bot mode, the switch to
+Operator mode, a reply by hand, names clicked in the feed, the send window and the dashboard. Click the
+preview to open the full video (13 MB, with a soft piano background).
+
+[![MeshOmit in use, animated preview](docs/meshomit-demo-preview.gif)](docs/meshomit-demo.mp4?raw=true)
+
+Direct link: [docs/meshomit-demo.mp4](docs/meshomit-demo.mp4?raw=true). It is also attached to the
+[release](https://github.com/opensourcera/MeshOmit/releases/latest).
+
 ## The screen, panel by panel
 
 | panel | what it shows |

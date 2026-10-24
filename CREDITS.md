@@ -29,6 +29,12 @@ The licences of these projects apply to their own code. They are not changed by 
 licence of MeshOmit, and nothing from them is redistributed in this repository except
 through the normal `pip install` of the packages listed in `requirements.txt`.
 
+## The video
+
+The demo video in `docs/` is a screen recording of MeshOmit itself. Its background music is a short
+piano-style piece synthesized by `tools/piano_track.py` in this repository (plain sine harmonics with
+decay, no samples), so it carries the same MIT licence as the code.
+
 ## Ideas borrowed
 
 - The window list, nick list, `<name>` lines, input line with a target label and the

@@ -42,6 +42,10 @@ writes `config.json` next to the exe. The build takes a minute or two.
 
 The build collects whole packages (`--collect-all textual rich meshcore bleak`) because Textual loads its
 CSS and widgets dynamically, and the `winrt` and `serial` submodules because they are imported lazily.
+The `winrt.windows.*` namespaces are separate pip packages that PyInstaller's submodule scan does not
+walk, so each one bleak touches is named as a `--hidden-import`; without `winrt.windows.foundation.collections`
+the exe connects but its Bluetooth scan reports no devices at all (the error only shows with
+`MESHOMIT_DEBUG=1`, which writes `meshomit-debug.log`).
 
 ## Tests
 

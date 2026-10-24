@@ -39,5 +39,6 @@ First public release, as a beta.
   after connecting.
 - First-run setup form; `config.json` written for you. The Bluetooth scan starts by itself and lists
   devices as they answer, MeshCore nodes first.
+- `MESHOMIT_DEBUG=1` writes `meshomit-debug.log` with the Bluetooth stack's own messages.
 - Single-file `MeshOmit.exe` build with PyInstaller.
 - SQLite storage in WAL mode.

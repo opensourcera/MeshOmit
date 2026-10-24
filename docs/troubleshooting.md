@@ -11,6 +11,11 @@ switch the phone's Bluetooth off, and press *Scan again* or let the program reco
 prints this hint in the events panel. Another copy of MeshOmit, or another companion program, has the same
 effect.
 
+**The scan finds no devices at all, not even headphones or a TV.** Bluetooth is off in Windows, or the
+program could not reach the Windows Bluetooth stack. Set `MESHOMIT_DEBUG=1` in the terminal before starting
+and look at `meshomit-debug.log` in the working folder: a `ModuleNotFoundError` there means a broken build
+of the exe (see `docs/building.md`); run from source with `meshomit.cmd` in the meantime.
+
 **Bluetooth is off.** On Windows the program switches the radio on by itself. If Windows refuses (some
 corporate policies), switch it on in Settings > Bluetooth & devices. "No Bluetooth radio found" means the
 adapter is unplugged or its driver is off.

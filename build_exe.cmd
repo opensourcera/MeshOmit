@@ -5,6 +5,9 @@ cd /d "%~dp0"
 python -m PyInstaller --noconfirm --clean --onefile --console --name MeshOmit ^
   --collect-all textual --collect-all rich --collect-all meshcore --collect-all bleak ^
   --collect-submodules winrt --collect-submodules serial ^
+  --hidden-import winrt.windows.foundation.collections --hidden-import winrt.windows.storage.streams ^
+  --hidden-import winrt.windows.devices.bluetooth.advertisement --hidden-import winrt.windows.devices.enumeration ^
+  --hidden-import winrt.windows.devices.bluetooth.genericattributeprofile --hidden-import winrt.windows.devices.radios ^
   --add-data "messages.json;." --add-data "config.example.json;." ^
   meshomit_exe.py
 if errorlevel 1 (echo BUILD FAILED & pause & exit /b 1)

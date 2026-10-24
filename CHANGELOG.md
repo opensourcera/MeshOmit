@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.1 beta (2026-10-24)
+
+- Setup form: the Bluetooth device list was clipped away by its container and never visible; the
+  connection sections now size to their content. The scan starts by itself when the form opens and
+  the list fills as devices answer, MeshCore nodes first in green; the button is "Scan again".
+- Windows exe: the build left out a Windows Bluetooth module that the scanner loads lazily, so the
+  exe's scan always reported 0 devices. The build script names the modules now.
+- `MESHOMIT_DEBUG=1` writes `meshomit-debug.log` with the Bluetooth stack's own messages.
+- The 1.0.0 Windows zip was built before the Repeaters panel, `/reply`, `{` fields, `{{` snippets,
+  the `@` people list and manual contacts; this zip has all of them.
+
 ## 1.0.0 beta (2026-10-23)
 
 First public release, as a beta.
@@ -39,6 +50,5 @@ First public release, as a beta.
   after connecting.
 - First-run setup form; `config.json` written for you. The Bluetooth scan starts by itself and lists
   devices as they answer, MeshCore nodes first.
-- `MESHOMIT_DEBUG=1` writes `meshomit-debug.log` with the Bluetooth stack's own messages.
 - Single-file `MeshOmit.exe` build with PyInstaller.
 - SQLite storage in WAL mode.

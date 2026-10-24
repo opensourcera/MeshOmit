@@ -99,7 +99,8 @@ Screen.operator #events { border: round #C8A2C8; }
 #setup_box Label.h { color: #FFFF00; text-style: bold; margin-top: 1; }
 #setup_box Input { margin-bottom: 0; }
 #setup_box Button { margin: 1 1 0 0; }
-#ble_list { height: 8; border: round #4040a0; }
+#ble_part, #serial_part, #tcp_part { height: auto; }
+#ble_list { height: 10; border: round #4040a0; }
 #serial_list { height: 6; border: round #4040a0; }
 .hidden { display: none; }
 #setup_msg { color: #FF8000; }
@@ -248,8 +249,11 @@ class SetupScreen(ModalScreen[dict]):
         self.show_ble_rows(scanning=True)
 
         def found(name, addr):
-            self.ble_rows = [r for r in self.ble_rows if r[1] != addr] + [(name, addr)]
-            self.show_ble_rows(scanning=True)
+            try:
+                self.ble_rows = [r for r in self.ble_rows if r[1] != addr] + [(name, addr)]
+                self.show_ble_rows(scanning=True)
+            except Exception as e:  # never let a drawing problem silence the scan
+                msg.update("Scan: %s" % e)
 
         try:
             rows = await connection.scan_ble(self.SCAN_SECONDS, found)

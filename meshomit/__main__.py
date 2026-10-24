@@ -13,6 +13,10 @@ from .app import MeshOmitApp, load_config  # noqa: E402
 
 
 def main():
+    if os.environ.get("MESHOMIT_DEBUG"):  # a file log of the Bluetooth stack next to the config
+        import logging
+        logging.basicConfig(filename=os.path.join(os.getcwd(), "meshomit-debug.log"), level=logging.DEBUG,
+                            format="%(asctime)s %(name)s %(levelname)s %(message)s")
     if getattr(sys, "frozen", False):  # MeshOmit.exe: config and messages live next to the exe
         here = os.path.dirname(os.path.abspath(sys.executable))
     else:

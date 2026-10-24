@@ -2,29 +2,35 @@
 
 ![MeshOmit in a live session: the feed, windows, nicks, repeaters and events panels](docs/screenshot-session.jpg)
 
-**Beta.** MeshOmit runs every day on the author's node, but it is young software: expect rough edges,
-and please open an issue for anything that breaks or looks wrong. Settings and files may still change
-between versions.
+**An IRC client for your MeshCore node, with a bot that answers tests for you.** Connect a Cardputer,
+T-Deck, Heltec, RAK or any board running the [MeshCore](https://github.com/ripplebiz/MeshCore) companion
+firmware over Bluetooth, USB or WiFi, and the mesh turns into something you can actually read.
 
-An IRC-style terminal client and test-reply bot for a [MeshCore](https://github.com/ripplebiz/MeshCore)
-companion node, in Python. Connect a Cardputer, T-Deck, Heltec, RAK or any other board running the
-companion firmware over Bluetooth, USB serial or WiFi, and MeshOmit gives you:
+**Why people like it**
 
-- **a chat screen like a classic IRC client**: one window per channel, room and private conversation,
-  a nick list, `<name>` lines in one colour per station, an input line with a target label, slash
-  commands, unread counters, clickable names;
-- **two modes**: *Operator* (you chat, the bot is silent) and *Bot* (it answers "test", "ping" and
-  "radio check" the way a person would, sends a beacon every few minutes and counts the replies);
-- **rooms and invites**: create a hashtag room or a private room with a random key and invite people by
-  encrypted direct message; invitations you receive are joined with one key press;
-- **repeater logging**: logs in to your repeaters, records battery, uptime, noise floor, counters, trace SNR
-  and the neighbour list every half hour;
-- **a dashboard** of the last 24 hours and all time: messages and tests per hour, answer rate, beacon hit
-  rate, stations heard, which repeater carries the traffic, hops histogram;
-- **everything stored in SQLite**, safe to query while the program runs;
-- **a single-file Windows executable** for people who do not want to install Python.
-
-Everything the bot says comes from `messages.json`; every rule is in `config.json`. Nothing is hard-coded.
+- **It reads like IRC.** Every message on one line with its time, the channel, `<name>` in a colour of
+  its own, and in grey how it reached you: "(3h +5.5dB via Hilltop>Ridge)". One window per channel, room
+  and private chat, unread counts, a nick list of who is around. You see the whole mesh at a glance
+  instead of scrolling a phone.
+- **Colours tell you what matters.** A test call is yellow, a message that names you is highlighted,
+  a private message is lilac, your own lines are white, old queued traffic is dimmed. Lilac frame:
+  you are talking. Blue frame: the bot is.
+- **The auto bot does the boring part.** Switch to Bot mode and it answers "test", "ping" and "radio
+  check" the way a person would, naming the station, saying where you are and how many hops it took,
+  never the same line twice to the same person, with a short wait so it does not sound like a machine.
+  It sends a beacon every few minutes and counts who replies. All the words are yours, in one text file.
+- **A dashboard shows your mesh over 24 hours.** Messages and tests per hour, answer rate, beacon hit
+  rate, which stations you hear most, which repeater carries your traffic, how many hops away people are.
+- **Repeaters watched for you.** Battery with a percentage and days left, noise floor, trace SNR there
+  and back, the neighbour your repeater hears best, logged every half hour.
+- **Reply in two key presses.** `a` prepares an answer to the last test with the station's name, hops,
+  repeaters and SNR already filled in; `@` lists the people heard; `{` lists fields like `{hops}` and
+  `{snr}` to drop into your own sentences; `{{` holds your saved lines.
+- **Rooms and private chat.** Create a hashtag room or a private room with a key, invite people by
+  encrypted direct message, join invitations with one key. `/whois` shows where a station is and how far.
+- **Nothing is hard-coded, nothing is hidden.** Every rule is in `config.json`, every sentence in
+  `messages.json`, every packet in a SQLite file you can query while it runs. Windows users get a single
+  exe to double-click; everyone else runs the Python.
 
 ## Install
 
@@ -203,6 +209,12 @@ docs/                the documentation
 
 `config.json`, the SQLite database and the build output are ignored by git on purpose: they hold your
 node's Bluetooth address, PIN and traffic.
+
+## Status
+
+MeshOmit is a **beta**. It runs every day on the author's node and does what this page says, but it is
+young software: expect rough edges, and please open an issue for anything that breaks or looks wrong.
+Settings and files may still change between versions.
 
 ## Licence
 

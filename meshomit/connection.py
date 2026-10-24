@@ -80,8 +80,17 @@ def is_alive(mc: MeshCore) -> bool:
         return True
 
 
-async def scan_ble(seconds: float = 6.0) -> list[tuple[str, str]]:
-    """(name, address) of the Bluetooth LE devices in range, MeshCore nodes first."""
+def _scan_order(row: tuple[str, str]) -> tuple:
+    """MeshCore nodes first, then named devices, then the nameless ones."""
+    name = row[0].lower()
+    return (0 if "meshcore" in name else 1 if name else 2, name)
+
+
+async def scan_ble(seconds: float = 6.0, on_found=None) -> list[tuple[str, str]]:
+    """(name, address) of the Bluetooth LE devices in range, MeshCore nodes first.
+
+    on_found(name, address) is called the moment a device is first seen (and again when a nameless device
+    turns out to have a name), so a screen can fill its list while the scan is still running."""
     from bleak import BleakScanner
     if sys.platform == "win32":
         from . import pairing
@@ -90,12 +99,20 @@ async def scan_ble(seconds: float = 6.0) -> list[tuple[str, str]]:
                 await asyncio.sleep(3)
         except Exception:
             pass
-    found = await BleakScanner.discover(timeout=seconds)
-    rows = []
-    for d in found:
-        name = d.name or ""
-        rows.append((name, d.address))
-    rows.sort(key=lambda r: (0 if "meshcore" in r[0].lower() else 1 if r[0] else 2, r[0].lower()))
+    seen: dict[str, str] = {}
+
+    def detected(device, _adv):
+        name = device.name or ""
+        if device.address in seen and (seen[device.address] or not name):
+            return
+        seen[device.address] = name
+        if on_found:
+            on_found(name, device.address)
+
+    async with BleakScanner(detection_callback=detected):
+        await asyncio.sleep(seconds)
+    rows = [(name, addr) for addr, name in seen.items()]
+    rows.sort(key=_scan_order)
     return rows
 
 

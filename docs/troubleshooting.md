@@ -7,7 +7,7 @@ terminals.
 
 **The node is not in the scan, or "node not reachable".** A node accepts one Bluetooth link at a time,
 and while a phone holds it the node stops advertising. Disconnect the node in the MeshCore phone app, or
-switch the phone's Bluetooth off, and scan or connect again. The program keeps retrying every 10 s and
+switch the phone's Bluetooth off, and press *Scan again* or let the program reconnect. The program keeps retrying every 10 s and
 prints this hint in the events panel. Another copy of MeshOmit, or another companion program, has the same
 effect.
 

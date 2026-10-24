@@ -17,9 +17,10 @@ MeshOmit.exe                the single-file Windows build; double-click it
 Without a `config.json` next to the program (next to the exe for the single-file build) a setup form
 opens:
 
-1. **Connection**. *Bluetooth LE*: press *Scan for devices*; the node must be switched on and must not be
-   connected to a phone (a node that is connected to a phone stops advertising and is invisible). MeshCore
-   nodes are listed first; pick yours, or type its address. *USB serial*: pick the port from the list.
+1. **Connection**. *Bluetooth LE*: a scan starts by itself and the list fills as devices answer, MeshCore
+   nodes first and in green. Pick yours (or type its address) and press *Scan again* if it is missing. The
+   node must be switched on and must not be connected to a phone or to another program: a node that holds
+   a Bluetooth link stops advertising and is invisible. *USB serial*: pick the port from the list.
    *WiFi / TCP*: host and port of a node with the TCP companion build.
 2. **Where you are**: a few place names separated by commas. The bot uses one at random each time it
    speaks ("Springfield", "Downtown", "Riverside"), so it does not sound like a machine.

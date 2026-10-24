@@ -37,6 +37,7 @@ First public release, as a beta.
   when off), USB serial, TCP.
 - A periodic pull of queued messages, because the node's "messages waiting" push can be missed right
   after connecting.
-- First-run setup form; `config.json` written for you.
+- First-run setup form; `config.json` written for you. The Bluetooth scan starts by itself and lists
+  devices as they answer, MeshCore nodes first.
 - Single-file `MeshOmit.exe` build with PyInstaller.
 - SQLite storage in WAL mode.

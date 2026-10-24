@@ -173,9 +173,9 @@ class SetupScreen(ModalScreen[dict]):
                 yield RadioButton("USB serial", id="rb_serial")
                 yield RadioButton("WiFi / TCP", id="rb_tcp")
             with Vertical(id="ble_part"):
-                yield Label("Bluetooth address (AA:BB:CC:DD:EE:FF), or press Scan and pick the node:")
+                yield Label("Pick the node from the list (it fills while the scan runs), or type its address:")
                 yield Input(placeholder="AA:BB:CC:DD:EE:FF", id="ble_addr")
-                yield Button("Scan for devices", id="scan")
+                yield Button("Scan again", id="scan")
                 yield OptionList(id="ble_list")
             with Vertical(id="serial_part", classes="hidden"):
                 yield Label("Serial port:")
@@ -201,6 +201,7 @@ class SetupScreen(ModalScreen[dict]):
             lst.add_option("%s  %s" % (port, desc))
         if not ports:
             lst.add_option("(no serial ports found)")
+        self.run_worker(self.scan(), exclusive=True, group="scan", name="scan")
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         which = event.pressed.id
@@ -209,31 +210,56 @@ class SetupScreen(ModalScreen[dict]):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "scan":
-            await self.scan()
+            self.run_worker(self.scan(), exclusive=True, group="scan", name="scan")
         elif event.button.id == "save":
             self.save()
         elif event.button.id == "quit":
             self.dismiss(None)
 
+    SCAN_SECONDS = 8
+
+    def show_ble_rows(self, scanning: bool) -> None:
+        """Redraw the device list from self.ble_rows, MeshCore nodes first, and the line under it."""
+        lst = self.query_one("#ble_list", OptionList)
+        msg = self.query_one("#setup_msg", Label)
+        self.ble_rows.sort(key=connection._scan_order)
+        lst.clear_options()
+        for name, addr in self.ble_rows:
+            t = Text("%-24s " % (name or "(no name)")[:24],
+                     style="bold #80FF80" if "meshcore" in (name or "").lower() else "")
+            t.append(addr, style="grey70")
+            lst.add_option(Option(t))
+        nodes = sum(1 for name, _ in self.ble_rows if "meshcore" in (name or "").lower())
+        if scanning:
+            msg.update("Scanning for %d seconds... %d devices so far, %d of them MeshCore nodes."
+                       % (self.SCAN_SECONDS, len(self.ble_rows), nodes))
+        elif nodes:
+            msg.update("%d devices found. MeshCore nodes are listed first in green: pick yours." % len(self.ble_rows))
+        else:
+            msg.update("%d devices found, none of them a MeshCore node. A node that is connected to a phone, or to "
+                       "another copy of MeshOmit, does not show up: disconnect it there (or turn the phone's "
+                       "Bluetooth off) and press Scan again." % len(self.ble_rows))
+
     async def scan(self):
         msg = self.query_one("#setup_msg", Label)
-        lst = self.query_one("#ble_list", OptionList)
-        lst.clear_options()
-        msg.update("Scanning for 6 seconds... make sure the node is on and not connected to a phone.")
+        btn = self.query_one("#scan", Button)
+        btn.disabled = True
+        self.ble_rows = []
+        self.show_ble_rows(scanning=True)
+
+        def found(name, addr):
+            self.ble_rows = [r for r in self.ble_rows if r[1] != addr] + [(name, addr)]
+            self.show_ble_rows(scanning=True)
+
         try:
-            rows = await connection.scan_ble(6)
+            rows = await connection.scan_ble(self.SCAN_SECONDS, found)
         except Exception as e:
-            msg.update("Scan failed: %s" % e)
+            msg.update("Scan failed: %s. Is Bluetooth switched on in Windows settings?" % e)
             return
-        self.ble_rows = rows
-        for name, addr in rows:
-            lst.add_option("%-24s %s" % (name or "(no name)", addr))
-        if any("meshcore" in (name or "").lower() for name, _ in rows):
-            msg.update("%d devices found. MeshCore nodes are listed first: pick one." % len(rows))
-        else:
-            msg.update("%d devices found, none of them a MeshCore node. A node that is connected to a phone does "
-                       "not show up: disconnect it in the phone app (or turn the phone's Bluetooth off) and scan again."
-                       % len(rows))
+        finally:
+            btn.disabled = False
+        self.ble_rows = list(rows)
+        self.show_ble_rows(scanning=False)
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_list.id == "ble_list":

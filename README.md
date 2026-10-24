@@ -44,8 +44,8 @@ firmware over Bluetooth, USB or WiFi, and the mesh turns into something you can 
    file is not signed: click *More info*, then *Run anyway*. Some antivirus programs are wary of
    PyInstaller executables; the zip's SHA-256 is on the release page if you want to check it.
 4. The program opens in Windows Terminal (Windows 11) with the setup form:
-   - *Bluetooth LE*: press *Scan for devices* and pick your node. The node must be on and must not be
-     connected to a phone, or it stays invisible;
+   - *Bluetooth LE*: the scan runs by itself; pick your node from the list (MeshCore nodes come first, in
+     green). The node must be on and must not be connected to a phone, or it stays invisible;
    - or *USB serial* and the port, or *WiFi / TCP* and the node's address;
    - a few place names, separated by commas, that the bot may say it is in;
    - *Save and start*. This writes `config.json` next to the exe.

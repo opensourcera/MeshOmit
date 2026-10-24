@@ -193,6 +193,7 @@ class Engine:
         # recent raw packets, used to attach SNR/RSSI/path to channel messages
         self.recent_rx: deque = deque(maxlen=200)
         self.repeater_rows: dict[str, dict] = {}
+        self.signal_tests: dict[str, dict] = {}  # repeater hash -> result of the last trace from the dialog
         self.counters = {"messages": 0, "triggers": 0, "replies": 0, "beacons": 0, "beacon_replies": 0}
         self.pin_needed = asyncio.Event()
         self.pending_cli: dict[str, list] = {}
@@ -1082,17 +1083,158 @@ class Engine:
 
     # ------------------------------------------------------------------ repeaters
     async def repeater_loop(self):
-        reps = self.cfg.get("repeaters", [])
-        if not reps:
-            return
-        interval = int(self.cfg.get("repeater_poll_minutes", 30)) * 60
         first = int(self.cfg.get("repeater_first_after_s", 20))
-        self.next_poll_at = time.time() + first
+        self.next_poll_at = time.time() + first if self.cfg.get("repeaters") else None
         await asyncio.sleep(first)
         while True:
+            if not self.cfg.get("repeaters"):  # none yet; the repeater dialog can add one at any time
+                self.next_poll_at = None
+                await asyncio.sleep(10)
+                continue
+            interval = int(self.cfg.get("repeater_poll_minutes", 30)) * 60
             await self.poll_repeaters()
             self.next_poll_at = time.time() + interval
             await asyncio.sleep(interval)
+
+    async def trace(self, hash4: str) -> tuple | None:
+        """A trace through one repeater (2-byte hash, one hop): (SNR at the repeater of our packet, SNR here
+        of its answer), or None when nothing comes back within 6 seconds. Needs no password."""
+        mc = self.mc
+        trace_evt = []
+        sub = mc.subscribe(EventType.TRACE_DATA, lambda e: trace_evt.append(e.payload))
+        try:
+            async with self.cmd_lock:
+                await mc.commands.send_trace(path=hash4, flags=1)
+            await asyncio.sleep(6)
+        finally:
+            mc.unsubscribe(sub)
+        if not trace_evt:
+            return None
+        path = trace_evt[-1].get("path") or []
+        if not path:
+            return None
+        there = path[0].get("snr")
+        back = path[-1].get("snr") if len(path) > 1 else trace_evt[-1].get("snr")
+        return there, back
+
+    # ------------------------------------------------------------------ the repeater dialog
+    def _blank_candidate(self, name: str, key, h: str, mine: bool = False) -> dict:
+        return {"name": name, "key": key, "hash": h, "mine": mine, "pkts": 0, "snr": None, "last_heard": None,
+                "hops": None, "km": None, "dir": None, "last_advert": None, "closest": False}
+
+    def repeater_candidates(self) -> list[dict]:
+        """Every repeater we could poll or test: our own (config.json), the repeaters in the node's contact
+        list, and the hashes that relayed packets to us in the last day. Each dict has name, key (None when
+        only a hash is known), hash (2 to 6 hex chars), mine, pkts and snr as the last hop of what we heard
+        in 24 h, last_heard, hops (the node's path length), km and dir, last_advert, closest. Our own come
+        first, then the strongest signal; 'closest' marks the one heard best."""
+        now = int(time.time())
+        cands: dict[str, dict] = {}  # 4-hex prefix (or ~hash) -> candidate
+        me = (self.mc.self_info or {}) if self.mc else {}
+        mlat, mlon = me.get("adv_lat") or 0.0, me.get("adv_lon") or 0.0
+
+        def add(key: str, name: str, mine: bool = False, c: dict | None = None) -> dict:
+            k = key.lower()
+            d = cands.setdefault(k[:4], self._blank_candidate(name, k, k[:4]))
+            if mine:
+                d["mine"], d["name"] = True, name
+            if c:
+                hops = c.get("out_path_len")
+                d["hops"] = hops if hops is not None and hops >= 0 else None
+                d["last_advert"] = c.get("last_advert") or None
+                lat, lon = c.get("adv_lat") or 0.0, c.get("adv_lon") or 0.0
+                if (lat or lon) and (mlat or mlon):
+                    d["km"], d["dir"] = distance_km(mlat, mlon, lat, lon)
+            return d
+
+        for r in self.cfg.get("repeaters", []):
+            add(r["pubkey"], r["name"], mine=True)
+        if self.mc:
+            for key, c in self.mc.contacts.items():
+                if c.get("type") == 2:
+                    add(key, c.get("adv_name") or key[:8], c=c)
+        # what relayed packets to us in the last day, by the hash of the last hop (1, 2 or 3 bytes)
+        loose = []
+        for h, n, snr, last in self.db.last_hop_stats(now - 24 * 3600):
+            h = (h or "").lower()
+            if len(h) < 2:
+                continue
+            hit = [d for d in cands.values() if d["key"] and (d["key"].startswith(h) or h.startswith(d["hash"]))]
+            if hit:
+                d = hit[0]
+                d["pkts"] += n
+                d["snr"] = snr if d["snr"] is None else max(d["snr"], snr)
+                d["last_heard"] = last if d["last_heard"] is None else max(d["last_heard"], last)
+            else:
+                loose.append((h, n, snr, last))
+        # hashes that match no contact: the short forms join the longest one they fit
+        loose.sort(key=lambda x: -len(x[0]))
+        for h, n, snr, last in loose:
+            d = next((d for d in cands.values() if d["key"] is None and d["hash"].startswith(h)), None)
+            if d is None:
+                known = self.known.get(h[:4]) or self.known.get(h[:2])
+                d = cands.setdefault("~" + h, self._blank_candidate(known or h.upper(), None, h))
+            d["pkts"] += n
+            d["snr"] = snr if d["snr"] is None else max(d["snr"], snr)
+            d["last_heard"] = last if d["last_heard"] is None else max(d["last_heard"], last)
+        rows = list(cands.values())
+        rows.sort(key=lambda d: (0 if d["mine"] else 1, -(d["snr"] if d["snr"] is not None else -999),
+                                 -d["pkts"], d["name"].lower()))
+        heard = [d for d in rows if d["snr"] is not None]
+        if heard:
+            max(heard, key=lambda d: d["snr"])["closest"] = True
+        return rows
+
+    async def test_signal(self, cand: dict) -> dict:
+        """A trace through one repeater, to see how well it hears us and we hear it. Needs no password."""
+        h = cand["hash"][:4]
+        tr = await self.trace(h) if self.mc and len(h) == 4 else None
+        res = {"ts": int(time.time()), "ok": bool(tr), "there": tr[0] if tr else None, "back": tr[1] if tr else None}
+        self.signal_tests[h] = res
+        if tr:
+            self.log("Signal test %s: it hears us at %s dB, we hear it at %s dB" % (cand["name"], tr[0], tr[1]), "ok")
+        else:
+            self.log("Signal test %s: no answer to the trace" % cand["name"], "warn")
+        return res
+
+    def save_config_keys(self, **keys) -> None:
+        """Write some top-level keys back to config.json, leaving the rest of the file as it is."""
+        path = self.cfg_path or "config.json"
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                on_disk = json.load(f)
+        except (OSError, ValueError):
+            on_disk = {}
+        on_disk.update(keys)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(on_disk, f, indent=2, ensure_ascii=False)
+
+    def add_own_repeater(self, name: str, key: str, password: str) -> dict:
+        """Make a repeater one of ours: the password goes to passwords/<key prefix>.txt next to config.json,
+        the entry (with that relative path) to the repeaters list in config.json. Returns the entry."""
+        folder = self.contacts_path("passwords")
+        os.makedirs(folder, exist_ok=True)
+        rel = "passwords/%s.txt" % key[:8].lower()
+        with open(os.path.join(folder, key[:8].lower() + ".txt"), "w", encoding="utf-8") as f:
+            f.write(password.strip() + "\n")
+        reps = [r for r in self.cfg.get("repeaters", []) if r["pubkey"].lower() != key.lower()]
+        entry = {"name": name, "pubkey": key.lower(), "password_file": rel, "password_key": None}
+        reps.append(entry)
+        self.cfg["repeaters"] = reps
+        self.known[key[:4].lower()] = name
+        self.known[key[:2].lower()] = name
+        self.save_config_keys(repeaters=reps)
+        return entry
+
+    def forget_own_repeater(self, name: str) -> bool:
+        """Take a repeater off our list (the password file stays). True when it was there."""
+        reps = [r for r in self.cfg.get("repeaters", []) if r["name"] != name]
+        if len(reps) == len(self.cfg.get("repeaters", [])):
+            return False
+        self.cfg["repeaters"] = reps
+        self.repeater_rows.pop(name, None)
+        self.save_config_keys(repeaters=reps)
+        return True
 
     async def poll_repeaters(self):
         if self.polling:  # the r key pressed during a poll: one at a time
@@ -1118,21 +1260,11 @@ class Engine:
         # The command lock is held only while a command goes out, not during the waits, so a message typed
         # during a poll leaves at once instead of after the whole poll.
         # 1. trace, 2-byte hash, one hop
-        trace_evt = []
-        sub = mc.subscribe(EventType.TRACE_DATA, lambda e: trace_evt.append(e.payload))
-        try:
-            async with self.cmd_lock:
-                await mc.commands.send_trace(path=key[:4], flags=1)
-            await asyncio.sleep(6)
-        finally:
-            mc.unsubscribe(sub)
-        if trace_evt:
-            path = trace_evt[-1].get("path") or []
-            if path:
-                row["trace_there"] = path[0].get("snr")
-                row["trace_back"] = path[-1].get("snr") if len(path) > 1 else trace_evt[-1].get("snr")
+        tr = await self.trace(key[:4])
+        if tr:
+            row["trace_there"], row["trace_back"] = tr
         # 2. login + status, each tried twice: a busy repeater drops the odd packet
-        pw = read_password(rep["password_file"], rep.get("password_key"))
+        pw = read_password(self.contacts_path(rep["password_file"]), rep.get("password_key"))
         ev = None
         for attempt in range(2):
             async with self.cmd_lock:

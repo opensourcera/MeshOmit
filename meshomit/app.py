@@ -12,6 +12,7 @@ import zlib
 
 from rich.style import Style
 from rich.text import Text
+from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -91,6 +92,17 @@ Screen.operator #events { border: round #C8A2C8; }
 #room_box { width: 100; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
 #room_box Label.h { color: #C8A2C8; text-style: bold; margin-top: 1; }
 #room_box Button { margin: 1 1 0 0; }
+#rep_box { width: 90%; max-width: 150; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
+#rep_box Label { width: 1fr; }
+#rep_box Label.h { color: #C8A2C8; text-style: bold; }
+#rep_box DataTable { height: auto; max-height: 16; background: #000000; margin: 1 0 0 0; }
+#rep_box Horizontal { height: auto; }
+#rep_box Button { margin: 1 1 0 0; }
+#pw_box { width: 90; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
+#pw_box Label { width: 1fr; }
+#pw_box Label.h { color: #C8A2C8; text-style: bold; }
+#pw_box Horizontal { height: auto; }
+#pw_box Button { margin: 1 1 0 0; }
 #invite_list { height: 6; border: round #5a3a7a; }
 #room_msg { color: #FF8000; }
 
@@ -738,6 +750,295 @@ class RoomScreen(ModalScreen[dict]):
         self.dismiss(None)
 
 
+class RepeaterPasswordScreen(ModalScreen[tuple]):
+    """Asks for the short name and the admin password of a repeater that becomes one of ours.
+    Returns (name, password) or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, name: str):
+        super().__init__()
+        self.name = name
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="pw_box"):
+            yield Label("Make %s one of your repeaters" % self.name, classes="h")
+            yield Label("Short name on screen (five letters fit the panel):")
+            yield Input(value=self.name[:12], id="pw_name")
+            yield Label("Its admin password, the one set in the MeshCore app. It is written to a file in the "
+                        "passwords folder next to config.json, never into config.json itself.")
+            yield Input(password=True, placeholder="admin password", id="pw_pass")
+            yield Label("", id="pw_msg")
+            with Horizontal():
+                yield Button("Save and poll", variant="success", id="ok")
+                yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#pw_pass", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        self.ok()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "ok":
+            self.ok()
+        else:
+            self.dismiss(None)
+
+    def ok(self) -> None:
+        name = self.query_one("#pw_name", Input).value.strip()
+        pw = self.query_one("#pw_pass", Input).value
+        if not name or not pw.strip():
+            self.query_one("#pw_msg", Label).update("Both the name and the password are needed.")
+            return
+        self.dismiss((name, pw))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class RepeaterScreen(ModalScreen[None]):
+    """The repeater dialog: your own repeaters and every repeater in range, with how well each is heard.
+    Enter polls one of yours or sends a signal test (a trace) to any other; m makes one yours (asks for its
+    admin password); f forgets one of yours; t is a signal test for any row."""
+
+    BINDINGS = [Binding("escape", "close", "Close"), Binding("m", "mine", "Make mine"),
+                Binding("f", "forget", "Forget"), Binding("t", "test", "Signal test")]
+
+    def __init__(self, engine):
+        super().__init__()
+        self.engine = engine
+        self.cands: list = []
+        self.busy = False
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="rep_box"):
+            yield Label("Repeaters: yours (mine) and the ones that carried packets to you in the last day", classes="h")
+            yield Label("Enter polls one of yours (battery, status, neighbours) or sends a signal test to any other: "
+                        "a trace that tells how well it hears you and you hear it. The row marked \"closest\" is the "
+                        "one heard best, the natural one to test against. m makes the selected repeater yours (asks "
+                        "for its admin password), f forgets one of yours, t is a signal test, Escape closes.")
+            t = DataTable(id="rep_table", cursor_type="row", zebra_stripes=True)
+            t.add_columns("", "Repeater", "Hash", "Pkts 24h", "SNR", "Heard", "Hops", "Dist", "Last result")
+            yield t
+            yield Label("", id="rep_msg")
+            with Horizontal():
+                yield Button("Poll or test (Enter)", variant="success", id="go")
+                yield Button("Make mine (m)", id="mine")
+                yield Button("Forget (f)", id="forget")
+                yield Button("Close", id="close")
+
+    def on_mount(self) -> None:
+        self.fill()
+        self.query_one("#rep_table", DataTable).focus()
+        if not self.engine.mc:
+            self.msg("Not connected to the node yet: the list comes from the log, polls and tests must wait.")
+        elif not self.engine.contacts_loaded:
+            self.msg("The node's contact list is not loaded yet: repeaters that sent no packet lately are missing.")
+
+    def msg(self, text: str) -> None:
+        self.query_one("#rep_msg", Label).update(text)
+
+    @staticmethod
+    def snr_style(snr) -> str:
+        if snr is None:
+            return "grey50"
+        return "#00FF00" if snr >= 5 else "#FFFF00" if snr >= -5 else "#FF8000"
+
+    def result_text(self, c: dict) -> Text:
+        if c["mine"]:
+            rep = self.engine.repeater_report(c["name"])
+            if rep.get("ok"):
+                t = Text("%.2fV" % ((rep.get("bat_mv") or 0) / 1000),
+                         style=MeshOmitApp.battery_style(rep.get("percent")))
+                if rep.get("percent") is not None:
+                    t.append(" %d%%" % rep["percent"], style=MeshOmitApp.battery_style(rep.get("percent")))
+                if rep.get("trace_there") is not None:
+                    t.append(" trace %.1f/%.1f" % (rep["trace_there"], rep.get("trace_back") or 0), style="#00FFFF")
+            elif rep.get("ts"):
+                t = Text(rep.get("note") or "no answer", style="#FF8000")
+            else:
+                return Text("no poll yet", style="grey50")
+            if rep.get("ts"):
+                t.append(" " + time.strftime("%H:%M", time.localtime(rep["ts"])), style="grey42")
+            return t
+        r = self.engine.signal_tests.get(c["hash"][:4])
+        if not r:
+            return Text("")
+        if r["ok"]:
+            t = Text("hears you %+.1f" % (r["there"] or 0), style=self.snr_style(r["there"]))
+            t.append(", you hear it %+.1f" % (r["back"] or 0), style=self.snr_style(r["back"]))
+        else:
+            t = Text("no answer", style="#FF8000")
+        t.append(" " + time.strftime("%H:%M", time.localtime(r["ts"])), style="grey42")
+        return t
+
+    def fill(self) -> None:
+        """Redraw the table from the engine's candidates, keeping the cursor where it was."""
+        t = self.query_one("#rep_table", DataTable)
+        row = t.cursor_row
+        t.clear()
+        self.cands = self.engine.repeater_candidates()
+        now = time.time()
+        for c in self.cands:
+            mark = Text("mine", style="bold #FFD700") if c["mine"] else Text("")
+            if c.get("closest"):
+                mark.append(", " if c["mine"] else "", style="grey50")
+                mark.append("closest", style="bold #00FFFF")
+            name = Text(c["name"][:22], style="bold bright_white" if c["mine"] else "")
+            snr = Text("" if c["snr"] is None else "%+.1f" % c["snr"], style=self.snr_style(c["snr"]))
+            if c["last_heard"]:
+                heard = Text(MeshOmitApp.ago(now - c["last_heard"]) + " ago", style="grey70")
+            elif c["last_advert"]:
+                heard = Text("advert " + MeshOmitApp.ago(max(0, now - c["last_advert"])) + " ago", style="grey50")
+            else:
+                heard = Text("not lately", style="grey42")
+            hops = "" if c["hops"] is None else "direct" if c["hops"] == 0 else "%d" % c["hops"]
+            dist = "" if c["km"] is None else "%.1f km %s" % (c["km"], c["dir"])
+            t.add_row(mark, name, c["hash"].upper(), str(c["pkts"]) if c["pkts"] else "", snr, heard, hops, dist,
+                      self.result_text(c), key=c["hash"])
+        if self.cands:
+            t.move_cursor(row=min(row if row is not None and row >= 0 else 0, len(self.cands) - 1))
+        else:
+            self.msg("No repeater heard yet and none in the node's contact list. Leave the program listening "
+                     "for a while and open this again.")
+
+    def selected(self) -> dict | None:
+        t = self.query_one("#rep_table", DataTable)
+        i = t.cursor_row
+        return self.cands[i] if self.cands and 0 <= i < len(self.cands) else None
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:  # Enter or a click on a row
+        self.go()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "go":
+            self.go()
+        elif event.button.id == "mine":
+            self.action_mine()
+        elif event.button.id == "forget":
+            self.action_forget()
+        else:
+            self.dismiss(None)
+
+    def ready(self) -> bool:
+        if self.busy:
+            self.msg("Still working on the last one, a moment.")
+            return False
+        if not self.engine.mc:
+            self.msg("Not connected to the node.")
+            return False
+        return True
+
+    def go(self) -> None:
+        c = self.selected()
+        if not c or not self.ready():
+            return
+        if c["mine"]:
+            rep = next((r for r in self.engine.cfg.get("repeaters", []) if r["name"] == c["name"]), None)
+            if rep:
+                self.run_worker(self.poll(rep), exclusive=True, group="rep")
+        else:
+            self.run_worker(self.test(c), exclusive=True, group="rep")
+
+    def action_test(self) -> None:
+        c = self.selected()
+        if c and self.ready():
+            self.run_worker(self.test(c), exclusive=True, group="rep")
+
+    async def poll(self, rep: dict) -> None:
+        if self.engine.polling:
+            self.msg("The regular poll is running right now; try again in a minute.")
+            return
+        self.busy = True
+        self.msg("Polling %s: trace, login, status, neighbours. This takes up to a minute..." % rep["name"])
+        try:
+            self.engine.polling = True
+            try:
+                await self.engine.poll_one(rep)
+            finally:
+                self.engine.polling = False
+            self.app.show_repeaters(list(self.engine.repeater_rows.values()))
+            rep_now = self.engine.repeater_report(rep["name"])
+            if rep_now.get("ok"):
+                self.msg("%s answered: %.2f V, up %.0f h, noise %s, trace %s/%s." % (
+                    rep["name"], (rep_now.get("bat_mv") or 0) / 1000, (rep_now.get("uptime_s") or 0) / 3600,
+                    rep_now.get("noise_floor"), rep_now.get("trace_there"), rep_now.get("trace_back")))
+            else:
+                self.msg("%s: %s. Is the password right, and is the repeater in range?" % (
+                    rep["name"], rep_now.get("note") or "no answer"))
+        except Exception as e:
+            self.msg("Poll failed: %s" % e)
+        finally:
+            self.busy = False
+            self.fill()
+
+    @staticmethod
+    def quality(snr) -> str:
+        return "solid" if snr >= 8 else "fine" if snr >= 0 else "weak but usable" if snr >= -8 else "at the edge"
+
+    async def test(self, c: dict) -> None:
+        if len(c["hash"]) < 4:
+            self.msg("Only a one-byte hash is known for %s, too short for a trace." % c["name"])
+            return
+        self.busy = True
+        self.msg("Signal test to %s: a trace goes out, the answer takes up to 6 seconds..." % c["name"])
+        try:
+            r = await self.engine.test_signal(c)
+            if r["ok"]:
+                self.msg("%s hears you at %+.1f dB (%s) and you hear it at %+.1f dB (%s)." % (
+                    c["name"], r["there"] or 0, self.quality(r["there"] or 0), r["back"] or 0, self.quality(r["back"] or 0)))
+            else:
+                self.msg("No answer from %s. It may be out of reach right now or busy: try again, or test the "
+                         "one marked closest." % c["name"])
+        except Exception as e:
+            self.msg("Signal test failed: %s" % e)
+        finally:
+            self.busy = False
+            self.fill()
+
+    def action_mine(self) -> None:
+        c = self.selected()
+        if not c:
+            return
+        if c["mine"]:
+            self.msg("%s is already one of yours." % c["name"])
+            return
+        if not c["key"]:
+            self.msg("The node has no contact for this hash, so its full key is unknown. When its advert arrives, "
+                     "/add it, then come back here.")
+            return
+        self.app.push_screen(RepeaterPasswordScreen(c["name"]), callback=lambda r: self.make_mine(c, r))
+
+    def make_mine(self, c: dict, r) -> None:
+        if not r:
+            return
+        name, pw = r
+        try:
+            entry = self.engine.add_own_repeater(name, c["key"], pw)
+        except OSError as e:
+            self.msg("Could not save the password file: %s" % e)
+            return
+        self.msg("%s is yours now; the password is in %s. Polling it..." % (name, entry["password_file"]))
+        self.fill()
+        if self.engine.mc:
+            self.run_worker(self.poll(entry), exclusive=True, group="rep")
+
+    def action_forget(self) -> None:
+        c = self.selected()
+        if not c or not c["mine"]:
+            self.msg("Select one of yours first.")
+            return
+        self.engine.forget_own_repeater(c["name"])
+        self.app.show_repeaters(list(self.engine.repeater_rows.values()))
+        self.fill()
+        self.msg("%s is no longer polled. Its password file stays where it is." % c["name"])
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
 class DashboardScreen(Screen):
     """Stats of the last 24 hours and the whole database. Toggled with d, closed with escape."""
     BINDINGS = [Binding("escape", "close", "Back"), Binding("d", "close", "Back")]
@@ -1375,7 +1676,8 @@ class MeshOmitApp(App):
         arg = parts[1].strip() if len(parts) > 1 else ""
         if cmd in ("help", "?"):
             self.write_system("*** Commands: /reply [NAME] (answer the last test, or NAME's last message, with hops "
-                              "and SNR)  /repeaters (battery, drain, best neighbour of each of our repeaters)  "
+                              "and SNR)  /repeaters (the repeater dialog: poll yours, signal-test any, make one yours; "
+                              "/repeaters report prints the text report)  "
                               "/add [NAME] (adverts waiting, or add one as a contact)  /forget NAME  "
                               "/contacts [export|clear yes|restore|manual on|off]  "
                               "/bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
@@ -1386,7 +1688,10 @@ class MeshOmitApp(App):
         elif cmd in ("reply", "re", "answer"):
             self.prepare_reply(arg)
         elif cmd in ("repeaters", "rep", "rptr"):
-            self.repeaters_report()
+            if arg.lower() in ("report", "text", "list"):
+                self.repeaters_report()
+            else:
+                self.open_repeaters()
         elif cmd == "add":
             await self.cmd_add(arg)
         elif cmd == "forget" and arg:
@@ -1727,8 +2032,27 @@ class MeshOmitApp(App):
                 txt.append("      no neighbour list yet", style="grey42")
             txt.append("\n")
         if not names:
-            txt.append("no repeaters configured", style="grey42")
+            txt.append("none yet: click here, or type /repeaters,\nto pick yours or test the ones in range", style="grey42")
         self.query_one("#repeaters", Static).update(txt)
+
+    def on_click(self, event: events.Click) -> None:
+        """A click on the Repeaters panel opens the repeater dialog."""
+        w = getattr(event, "widget", None)
+        while w is not None:
+            if getattr(w, "id", None) == "repeaters":
+                self.open_repeaters()
+                return
+            w = w.parent
+
+    def open_repeaters(self) -> None:
+        if not self.engine:
+            return
+
+        def closed(_):
+            self.show_repeaters(list(self.engine.repeater_rows.values()))
+            self.focus_line()
+
+        self.push_screen(RepeaterScreen(self.engine), callback=closed)
 
     def repeaters_report(self):
         """The /repeaters command: the full picture of each of our repeaters in the feed."""

@@ -22,7 +22,9 @@ firmware over Bluetooth, USB or WiFi, and the mesh turns into something you can 
 - **A dashboard shows your mesh over 24 hours.** Messages and tests per hour, answer rate, beacon hit
   rate, which stations you hear most, which repeater carries your traffic, how many hops away people are.
 - **Repeaters watched for you.** Battery with a percentage and days left, noise floor, trace SNR there
-  and back, the neighbour your repeater hears best, logged every half hour.
+  and back, the neighbour your repeater hears best, logged every half hour. A dialog lists every repeater
+  in range with its signal, marks the closest, runs a signal test through any of them, and makes one
+  yours with its admin password.
 - **Reply in two key presses.** `a` prepares an answer to the last test with the station's name, hops,
   repeaters and SNR already filled in; `@` lists the people heard; `{` lists fields like `{hops}` and
   `{snr}` to drop into your own sentences; `{{` holds your saved lines.
@@ -136,7 +138,7 @@ from the release page.
 | **Status** (top right) | link state and uptime, mode, number of contacts on the node, messages and tests heard, answers given, beacons sent and replied to, time to the next beacon and the next repeater poll, which repeaters carried the traffic in the last hour |
 | **Windows (1-9)** | one entry per channel, room and private conversation, with unread counts; the number in front selects it. A room shows its creator after `*` |
 | **Nicks (last 3 h)** | who spoke in the selected window, most recent first, with hops ("direct", "2h"), distance and direction when both nodes advertise a position, and how many messages |
-| **Repeaters** | two lines per configured repeater: battery with a rough percentage and the day's drain, uptime, noise floor, trace SNR there/back; then the neighbour it hears best (your own repeaters left out) with SNR and age. `/repeaters` prints the full report |
+| **Repeaters** | two lines per repeater of yours: battery with a rough percentage and the day's drain, uptime, noise floor, trace SNR there/back; then the neighbour it hears best (your own repeaters left out) with SNR and age. A click on the panel (or `/repeaters`) opens the repeater dialog: every repeater in range with its signal, poll yours, signal-test any, make one yours |
 | **Events** | what the program did and why: connection steps, contacts loaded, beacons, why the bot stayed quiet, invitations, repeater results |
 | **Footer** | the single-key shortcuts (they work when the input line is not focused; press Escape) |
 

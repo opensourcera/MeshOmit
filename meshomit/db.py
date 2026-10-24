@@ -182,6 +182,12 @@ class Db:
             "SELECT last_hop, COUNT(*) FROM rx_packets WHERE ts >= ? GROUP BY last_hop", (since_ts,)).fetchall()
         return {h: n for h, n in rows}
 
+    def last_hop_stats(self, since_ts: int) -> list:
+        """(last-hop hash, packets, best SNR, newest ts) per relaying repeater since since_ts; direct packets left out."""
+        return self.conn.execute(
+            "SELECT last_hop, COUNT(*), MAX(snr), MAX(ts) FROM rx_packets WHERE ts >= ? AND last_hop != '' "
+            "GROUP BY last_hop", (since_ts,)).fetchall()
+
     def last_repeater_status(self, name: str):
         return self.conn.execute(
             "SELECT * FROM repeater_status WHERE name = ? ORDER BY ts DESC LIMIT 1", (name,)).fetchone()

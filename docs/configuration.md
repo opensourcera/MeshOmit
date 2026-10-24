@@ -105,11 +105,17 @@ decides whether the bot speaks.
 |---|---|
 | `name` | how the repeater is called on screen and in the database |
 | `pubkey` | its public key, 64 hex characters, as the MeshCore app shows it |
-| `password_file` | a text file with the admin password. With `password_key` set, the line `key=value` of that file is used (`admin_password=secret`); without it, the whole file is the password. Keep these files out of any repository |
+| `password_file` | a text file with the admin password, as an absolute path or relative to `config.json`. With `password_key` set, the line `key=value` of that file is used (`admin_password=secret`); without it, the whole file is the password. Keep these files out of any repository |
 | `repeater_poll_minutes` | time between polls |
 | `repeater_first_after_s` | delay before the first poll after connecting |
 
 An empty list switches repeater polling off.
+
+The repeater dialog (a click on the *Repeaters* panel, or `/repeaters`) edits this list for you: *m* on a
+repeater asks for its admin password, writes it to `passwords/<first 8 hex of the key>.txt` next to
+`config.json` and adds the entry with that relative path; *f* removes an entry. The program reads
+`config.json` once at start, so changes made by hand still need a restart; changes made in the dialog
+take effect at once.
 
 ### human
 

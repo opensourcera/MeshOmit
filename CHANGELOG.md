@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The repeater dialog: a click on the *Repeaters* panel (or `/repeaters`) lists your repeaters and every
+  repeater that carried packets to you in the last day, with packets, SNR, age, hops and distance, the
+  one heard best marked *closest*. Enter polls one of yours or sends a signal test (a trace, no password
+  needed) to any other and reports how well it hears you and you hear it. `m` makes a repeater yours:
+  the admin password goes to `passwords/<key>.txt` next to `config.json`, the entry to `config.json`, and
+  it is polled right away; `f` forgets one. `/repeaters report` is the old text report.
+- `password_file` in `config.json` may be relative to `config.json`.
+- The Repeaters panel says how to get started when no repeater is configured.
+
 ## 1.0.2 beta (2026-10-24)
 
 - Setup form: the Bluetooth device list was clipped away by its container and never visible; the

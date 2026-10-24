@@ -38,7 +38,8 @@ build_exe.cmd
 
 produces `dist\MeshOmit.exe` (about 36 MB; Python and every library are inside), and copies
 `messages.json` and `config.example.json` next to it. Ship the exe with `messages.json`; the first start
-writes `config.json` next to the exe. The build takes a minute or two.
+writes `config.json` next to the exe. The build takes a minute or two. `build_exe.cmd somefolder` puts
+the exe in `somefolder` instead, handy while the exe in `dist` is running (a running exe cannot be replaced).
 
 The build collects whole packages (`--collect-all textual rich meshcore bleak`) because Textual loads its
 CSS and widgets dynamically, and the `winrt` and `serial` submodules because they are imported lazily.

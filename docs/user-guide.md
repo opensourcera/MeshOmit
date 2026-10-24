@@ -81,11 +81,12 @@ the person's name.
 direction ("8.0km W"). The creator of a room heads its list with a `*`. In the *All* window the list
 covers everything.
 
-**Repeaters.** Two lines per configured repeater. First the last poll: battery voltage with a rough
+**Repeaters.** Two lines per repeater of yours. First the last poll: battery voltage with a rough
 percentage (green above 50 %, yellow, red below 25 %) and how many mV it lost or gained over the last day,
 uptime, noise floor, the trace SNR there and back, the time. Then the neighbour it hears best among the
 nodes that are not your own repeaters, with its SNR and how long ago, and how many neighbours it reported
-in all. `/repeaters` prints the full picture in the feed (section 11).
+in all. Click the panel (or type `/repeaters`) for the repeater dialog: pick your own repeaters, poll one,
+or send a signal test to any repeater in range (section 11).
 
 **Events.** What the program did and any problem: connection steps, contacts loaded, beacons sent, the
 reason the bot stayed quiet, invitations received, repeater results.
@@ -122,7 +123,7 @@ commands below do everything the keys do, so you rarely need to leave the line.
 | `/msg Name text` | sends a direct message without changing window; names with spaces work, the longest leading words that name a contact exactly are used |
 | `/whois Name` | what the node knows about a contact (section 8); a part of the name is enough (`/who`, `/where`, `/loc`) |
 | `/reply`, `/reply Name` | answer the last test call (or that station's last message) by hand, see "Answering a test yourself" below |
-| `/repeaters` | battery, drain, trace and best neighbour of each of your repeaters (`/rep`) |
+| `/repeaters` | the repeater dialog: your repeaters and the ones in range, poll, signal test, make one yours (`/rep`); `/repeaters report` prints the text report in the feed |
 | `/add`, `/add Name`, `/forget Name`, `/contacts ...` | manage the node's contact list, see "Contacts: who the node knows" |
 | `/bot`, `/op` | switch the bot on or off (`/mode` toggles) |
 | `/join` | opens the room window (section 6) |
@@ -313,7 +314,7 @@ These work when the input line does not have the focus (press Escape first):
 | `b` | send a beacon now |
 | `t` | send "Test" to the window you are looking at (the beacon channel in the *All* window) |
 | `a` | answer the last test call by hand (`/reply`) |
-| `r` | poll the repeaters now |
+| `r` | poll your repeaters now (the repeater dialog opens with a click on the panel or `/repeaters`) |
 | `p` | pause or resume the bot's answers |
 | `q` | quit |
 
@@ -371,8 +372,31 @@ It refreshes every 30 seconds. Escape or `d` closes it.
 
 ## 11. Repeaters
 
-With repeaters configured (see [configuration.md](configuration.md)), every 30 minutes and on `r` or
-`/poll` the program, for each repeater:
+### The repeater dialog
+
+Click the *Repeaters* panel, or type `/repeaters`, and a dialog lists every repeater the program knows:
+your own first (marked *mine*), then the repeaters in the node's contact list and every hash that
+relayed a packet to you in the last day, strongest signal first. For each: name, hash, how many packets
+it carried to you in 24 hours, the best SNR you heard it with, when, how many hops away the node routes
+to it, the distance when both positions are known, and the result of its last poll or signal test. The
+row marked *closest* is the one heard best: the natural one to test your signal against.
+
+| key | action |
+|---|---|
+| `Enter` (or a click on the row) | one of yours: poll it now (trace, login, status, neighbours; up to a minute). Any other: a signal test |
+| `t` | a signal test for the selected repeater: a trace through it, which needs no password. The answer tells how well the repeater hears you and how well you hear it, in dB, with a word for each ("solid", "fine", "weak but usable", "at the edge") |
+| `m` | make the selected repeater one of yours. A small form asks for a short name and its admin password. The password is written to `passwords/<key prefix>.txt` next to `config.json` and the repeater to the `repeaters` list of `config.json`; it is polled at once and then every half hour |
+| `f` | forget one of yours: it is taken off the list in `config.json` (the password file stays) |
+| `Escape` | close |
+
+A repeater known only by its hash (no advert received yet, so the node has no contact for it) can be
+tested but not made yours: `/add` it when its advert arrives, then come back. A repeater's advert also
+has to be in the node's contact list for the hops and distance columns.
+
+### The polls
+
+With repeaters of your own (made so in the dialog, or written into [config.json](configuration.md)),
+every 30 minutes and on `r` or `/poll` the program, for each repeater:
 
 1. sends a trace through it and records the SNR there and back;
 2. logs in with the admin password read from a file (never stored in `config.json`), asks for the status
@@ -382,7 +406,7 @@ With repeaters configured (see [configuration.md](configuration.md)), every 30 m
 The Repeaters panel shows the latest readings, the dashboard the history, and the events panel one line
 per poll ("Ridge: 4.09 V, up 44.4 h, noise -117, trace 13.25/9.25").
 
-`/repeaters` (or `/rep`) prints, for each of your repeaters: the battery voltage with a rough percentage
+`/repeaters report` prints, for each of your repeaters: the battery voltage with a rough percentage
 and the trend over the last day ("losing 35 mV a day, roughly 20 days to 3.4 V", or "holding" when solar
 keeps up), uptime, noise floor, last RSSI, packet counters, receive errors, the trace SNR both ways, and
 the five neighbours it hears best with their SNR and age, your own repeaters left out of that list. The

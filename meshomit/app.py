@@ -96,6 +96,8 @@ Screen.operator #events { border: round #C8A2C8; }
 
 /* setup */
 #setup_box { width: 90; height: 90%; border: thick #4040a0; background: #101030; padding: 1 2; }
+#setup_scroll { height: 1fr; }
+#setup_foot, #setup_foot Horizontal { height: auto; }
 #setup_box Label.h { color: #FFFF00; text-style: bold; margin-top: 1; }
 #setup_box Input { margin-bottom: 0; }
 #setup_box Button { margin: 1 1 0 0; }
@@ -166,35 +168,37 @@ class SetupScreen(ModalScreen[dict]):
         self.ble_rows: list = []
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="setup_box"):
-            yield Label("MeshOmit setup", classes="h")
-            yield Label("How is the MeshCore node connected to this computer?")
-            with RadioSet(id="conn_type"):
-                yield RadioButton("Bluetooth LE", value=True, id="rb_ble")
-                yield RadioButton("USB serial", id="rb_serial")
-                yield RadioButton("WiFi / TCP", id="rb_tcp")
-            with Vertical(id="ble_part"):
-                yield Label("Pick the node from the list (it fills while the scan runs), or type its address:")
-                yield Input(placeholder="AA:BB:CC:DD:EE:FF", id="ble_addr")
-                yield Button("Scan again", id="scan")
-                yield OptionList(id="ble_list")
-            with Vertical(id="serial_part", classes="hidden"):
-                yield Label("Serial port:")
-                yield Input(placeholder="COM6 or /dev/ttyUSB0", id="serial_port")
-                yield OptionList(id="serial_list")
-            with Vertical(id="tcp_part", classes="hidden"):
-                yield Label("Host and port of the node:")
-                yield Input(placeholder="192.168.1.50", id="tcp_host")
-                yield Input(placeholder="5000", id="tcp_port", value="5000")
-            yield Label("Where you are, a few names separated by commas (the bot uses one at random):", classes="h")
-            yield Input(placeholder="Springfield, Downtown, Riverside", id="locations")
-            yield Label("Your node's name (leave empty to take it from the node):", classes="h")
-            yield Input(placeholder="", id="node_name")
-            yield Label("", id="setup_msg")
-            with Horizontal():
-                yield Button("Save and start", variant="success", id="save")
-                yield Button("Quit", id="quit")
-
+        with Vertical(id="setup_box"):
+            with VerticalScroll(id="setup_scroll"):
+                yield Label("MeshOmit setup", classes="h")
+                yield Label("How is the MeshCore node connected to this computer?")
+                with RadioSet(id="conn_type"):
+                    yield RadioButton("Bluetooth LE", value=True, id="rb_ble")
+                    yield RadioButton("USB serial", id="rb_serial")
+                    yield RadioButton("WiFi / TCP", id="rb_tcp")
+                with Vertical(id="ble_part"):
+                    yield Label("Pick the node from the list (it fills while the scan runs), or type its address:")
+                    yield Input(placeholder="AA:BB:CC:DD:EE:FF", id="ble_addr")
+                    yield Button("Scan again", id="scan")
+                    yield OptionList(id="ble_list")
+                with Vertical(id="serial_part", classes="hidden"):
+                    yield Label("Serial port:")
+                    yield Input(placeholder="COM6 or /dev/ttyUSB0", id="serial_port")
+                    yield OptionList(id="serial_list")
+                with Vertical(id="tcp_part", classes="hidden"):
+                    yield Label("Host and port of the node:")
+                    yield Input(placeholder="192.168.1.50", id="tcp_host")
+                    yield Input(placeholder="5000", id="tcp_port", value="5000")
+                yield Label("Where you are, a few names separated by commas (the bot uses one at random):", classes="h")
+                yield Input(placeholder="Springfield, Downtown, Riverside", id="locations")
+                yield Label("Your node's name (leave empty to take it from the node):", classes="h")
+                yield Input(placeholder="", id="node_name")
+            with Vertical(id="setup_foot"):  # always visible under the scrolling part
+                yield Label("", id="setup_msg")
+                with Horizontal():
+                    yield Button("Save and start", variant="success", id="save")
+                    yield Button("Quit", id="quit")
+    
     def on_mount(self) -> None:
         ports = connection.serial_ports()
         lst = self.query_one("#serial_list", OptionList)
@@ -208,6 +212,11 @@ class SetupScreen(ModalScreen[dict]):
         which = event.pressed.id
         for part, rb in (("#ble_part", "rb_ble"), ("#serial_part", "rb_serial"), ("#tcp_part", "rb_tcp")):
             self.query_one(part).set_class(rb != which, "hidden")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter in any field of the form is the same as Save and start."""
+        event.stop()
+        self.save()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "scan":

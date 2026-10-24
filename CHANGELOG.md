@@ -5,6 +5,8 @@
 - Setup form: the Bluetooth device list was clipped away by its container and never visible; the
   connection sections now size to their content. The scan starts by itself when the form opens and
   the list fills as devices answer, MeshCore nodes first in green; the button is "Scan again".
+- Setup form: the message line and the Save/Quit buttons stay visible under the scrolling part, and Enter in
+  any field saves.
 - Windows exe: the build left out a Windows Bluetooth module that the scanner loads lazily, so the
   exe's scan always reported 0 devices. The build script names the modules now.
 - `MESHOMIT_DEBUG=1` writes `meshomit-debug.log` with the Bluetooth stack's own messages.

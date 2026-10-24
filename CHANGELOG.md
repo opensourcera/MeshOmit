@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.1 beta (2026-10-24)
+## 1.0.2 beta (2026-10-24)
 
 - Setup form: the Bluetooth device list was clipped away by its container and never visible; the
   connection sections now size to their content. The scan starts by itself when the form opens and

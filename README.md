@@ -36,7 +36,7 @@ firmware over Bluetooth, USB or WiFi, and the mesh turns into something you can 
 
 ### Windows, without Python
 
-1. Download `MeshOmit-1.0.1-windows.zip` from the
+1. Download `MeshOmit-1.0.2-windows.zip` from the
    [releases page](https://github.com/opensourcera/MeshOmit/releases/latest).
 2. Unzip it into a folder of your choice, for example `C:\MeshOmit`. Keep the files together:
    `MeshOmit.exe`, `messages.json`, `config.example.json`.

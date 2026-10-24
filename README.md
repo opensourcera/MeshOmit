@@ -112,12 +112,13 @@ every name, call sign and place in them is made up.
 
 A live session recorded on a busy regional mesh: the bot answering tests in Bot mode, the switch to
 Operator mode, a reply by hand, names clicked in the feed, the send window and the dashboard. Click the
-preview to open the full video (13 MB, with a soft piano background).
+preview to **watch the full video** (2:39, with a soft piano background):
 
-[![MeshOmit in use, animated preview](docs/meshomit-demo-preview.gif)](docs/meshomit-demo.mp4?raw=true)
+[![MeshOmit in use, animated preview](docs/meshomit-demo-preview.gif)](https://opensourcera.github.io/MeshOmit/)
 
-Direct link: [docs/meshomit-demo.mp4](docs/meshomit-demo.mp4?raw=true). It is also attached to the
-[release](https://github.com/opensourcera/MeshOmit/releases/latest).
+Watch it at [opensourcera.github.io/MeshOmit](https://opensourcera.github.io/MeshOmit/), or download
+[meshomit-demo.mp4](https://github.com/opensourcera/MeshOmit/releases/download/v1.0.0/meshomit-demo.mp4) (13 MB)
+from the release page.
 
 ## The screen, panel by panel
 

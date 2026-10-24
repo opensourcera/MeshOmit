@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeshOmit video tour</title>
+<meta name="description" content="A two-and-a-half-minute tour of MeshOmit, the IRC-style terminal client and test-reply bot for MeshCore nodes.">
+<style>
+  :root { --bg: #0d0b14; --fg: #e8e2f2; --dim: #a79fb8; --accent: #c8a2c8; --link: #8fd3ff; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; color: var(--accent); }
+  p { margin: 8px 0; color: var(--dim); }
+  video { display: block; width: 100%; height: auto; border-radius: 8px; background: #000; margin: 16px 0; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
+  a { color: var(--link); }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; }
+  .small { font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row">
+    <h1>MeshOmit, a tour in two and a half minutes</h1>
+    <a href="https://github.com/opensourcera/MeshOmit">Back to the repository</a>
+  </div>
+  <p>A live session on a busy regional mesh: the bot answering tests in Bot mode, the switch to Operator mode,
+     a reply by hand, names clicked in the feed, the send window and the dashboard. Soft piano in the background.</p>
+  <video controls preload="metadata" poster="screenshot-session.jpg">
+    <source src="meshomit-demo.mp4" type="video/mp4">
+    Your browser cannot play this video. <a href="meshomit-demo.mp4">Download it</a> instead.
+  </video>
+  <p class="small">The names, call signs and messages in the recording are real public-channel traffic of the day.
+     <a href="meshomit-demo.mp4" download>Download the video (13 MB)</a> ·
+     <a href="https://github.com/opensourcera/MeshOmit/releases/latest">Download MeshOmit for Windows</a> ·
+     <a href="https://github.com/opensourcera/MeshOmit/blob/main/docs/user-guide.md">User guide</a></p>
+</main>
+</body>
+</html>

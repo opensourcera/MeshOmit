@@ -93,6 +93,12 @@ Screen.operator #events { border: round #C8A2C8; }
 #room_box { width: 100; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
 #room_box Label.h { color: #C8A2C8; text-style: bold; margin-top: 1; }
 #room_box Button { margin: 1 1 0 0; }
+#find_box { width: 90%; max-width: 150; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
+#find_box Label { width: 1fr; }
+#find_box Label.h { color: #C8A2C8; text-style: bold; }
+#find_box DataTable { height: auto; max-height: 14; background: #000000; margin: 1 0 0 0; }
+#find_box Horizontal { height: auto; }
+#find_box Button { margin: 1 1 0 0; }
 #rep_box { width: 90%; max-width: 150; height: auto; border: thick #C8A2C8; background: #1a1026; padding: 1 2; }
 #rep_box Label { width: 1fr; }
 #rep_box Label.h { color: #C8A2C8; text-style: bold; }
@@ -753,6 +759,111 @@ class RoomScreen(ModalScreen[dict]):
         self.dismiss(None)
 
 
+class RoomFinderScreen(ModalScreen[str]):
+    """Find hashtag rooms that have traffic on the air. MeshCore has no directory: the finder checks room
+    names (typed, mentioned in chat, common names, words seen lately) against the group packets the node
+    hears but cannot read. Enter on a row, or on a typed name, joins it. Returns the room name or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Close")]
+
+    def __init__(self, engine):
+        super().__init__()
+        self.engine = engine
+        self.rows: list = []
+        self.found: list = []
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="find_box"):
+            yield Label("Find rooms", classes="h")
+            yield Label("MeshCore has no list of rooms: a hashtag room exists wherever people added a channel with "
+                        "that name. But every group message on the air carries a trace of its channel key, so a "
+                        "name can be checked against the traffic your node hears without being able to read it. "
+                        "Below: names people mentioned in chat, common names, your places and words seen lately "
+                        "that have real traffic. Type a name to try your own guess. Enter joins the selected room "
+                        "(or the typed name); Escape closes.")
+            yield Input(placeholder="type a room name to try, for example #atlanta", id="find_name")
+            t = DataTable(id="find_table", cursor_type="row", zebra_stripes=True)
+            t.add_columns("Room", "Messages", "Last heard", "Sample", "Found by")
+            yield t
+            yield Label("", id="find_msg")
+            with Horizontal():
+                yield Button("Join (Enter)", variant="success", id="join")
+                yield Button("Close", id="close")
+
+    def on_mount(self) -> None:
+        self.found = self.engine.find_rooms()
+        self.fill()
+        self.query_one("#find_name", Input).focus()
+
+    def fill(self, typed: str = "") -> None:
+        t = self.query_one("#find_table", DataTable)
+        t.clear()
+        rows = list(self.found)
+        name = self.engine.room_name(typed)
+        if len(name) >= 2:
+            r = self.engine.try_room(name)
+            r["found_by"] = "typed by you"
+            rows = [r] + [x for x in rows if x["name"] != name]
+        self.rows = rows
+        now = time.time()
+        for r in rows:
+            n = Text(str(r["packets"]) if r["packets"] else "none heard",
+                     style="bold #80FF80" if r["packets"] else "grey50")
+            last = Text(MeshOmitApp.ago(now - r["last_ts"]) + " ago" if r["last_ts"] else "", style="grey70")
+            t.add_row(Text(r["name"], style="bold bright_white"), n, last,
+                      Text((r["sample"] or "")[:48], style="grey70"), Text(r["found_by"], style="grey50"))
+        if rows:
+            t.move_cursor(row=0)
+        pk, ch = self.engine.unknown_summary()
+        matched = sum(1 for r in self.found if r["packets"])
+        if not pk:
+            self.msg("No unreadable group traffic heard yet since the program started. Leave it listening a while; "
+                     "a typed name can still be joined.")
+        else:
+            self.msg("%d group messages on %d channels heard since start that no channel here can read; %d name%s "
+                     "matched. A name with \"none heard\" can still be joined: you would be the first there."
+                     % (pk, ch, matched, "" if matched == 1 else "s"))
+
+    def msg(self, text: str) -> None:
+        try:
+            self.query_one("#find_msg", Label).update(text)
+        except NoMatches:
+            pass
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "find_name":
+            self.fill(event.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        name = self.engine.room_name(event.value)
+        if len(name) >= 2:
+            self.dismiss(name)
+        elif self.rows:
+            self.dismiss(self.rows[0]["name"])
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        i = self.query_one("#find_table", DataTable).cursor_row
+        if self.rows and 0 <= i < len(self.rows):
+            self.dismiss(self.rows[i]["name"])
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "join":
+            typed = self.query_one("#find_name", Input).value
+            name = self.engine.room_name(typed)
+            if len(name) >= 2:
+                self.dismiss(name)
+                return
+            i = self.query_one("#find_table", DataTable).cursor_row
+            if self.rows and 0 <= i < len(self.rows):
+                self.dismiss(self.rows[i]["name"])
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class RepeaterPasswordScreen(ModalScreen[tuple]):
     """Asks for the short name and the admin password of a repeater that becomes one of ours.
     Returns (name, password) or None."""
@@ -1244,6 +1355,7 @@ class MeshOmitApp(App):
         Binding("m", "mode", "Bot/Operator"),
         Binding("enter", "send", "Send"),
         Binding("j", "room", "Room"),
+        Binding("f", "rooms", "Find rooms"),
         Binding("d", "dashboard", "Dashboard"),
         Binding("b", "beacon", "Beacon now"),
         Binding("t", "test", "Send Test"),
@@ -1340,7 +1452,8 @@ class MeshOmitApp(App):
                           "They are filled in when you send, for the station you address with @[name]. "
                           "Type {{ for your saved lines (add and edit them there).")
         self.write_system("*** Keys when the box is not focused (press Escape): 1-9 window, a answer the last test "
-                          "with hops and SNR, m mode, j room, d dashboard, b beacon, t test, r poll, q quit. "
+                          "with hops and SNR, m mode, j room, f find rooms, d dashboard, b beacon, t test, r poll, "
+                          "q quit. "
                           "Click a nick or a <name> for a private window.")
         if not self.engine.cfg.get("repeaters"):
             self.write_system("*** Own a repeater? Click the Repeaters panel (or type /repeaters) once connected: "
@@ -1717,6 +1830,7 @@ class MeshOmitApp(App):
                               "/contacts [export|clear yes|restore|manual on|off]  "
                               "/bot /op (bot on/off)  /w N (window N)  /query NAME (private window)  "
                               "/msg NAME TEXT  /whois NAME (type, last advert, position, distance)  /join (room)  "
+                              "/rooms (find hashtag rooms with traffic, join one)  "
                               "/send (big window)  /dash  /beacon  /test  /poll  /pause  /quit")
         elif cmd in ("whois", "who", "where", "loc") and arg:
             self.whois(arg)
@@ -1758,6 +1872,8 @@ class MeshOmitApp(App):
                     break
             else:
                 self.write_system("*** /msg NAME TEXT: no contact named like that (names are matched whole).")
+        elif cmd in ("rooms", "find", "f"):
+            await self.action_rooms()
         elif cmd in ("join", "j"):
             await self.action_room()
         elif cmd in ("send", "s"):
@@ -2235,6 +2351,21 @@ class MeshOmitApp(App):
         if not self.engine or isinstance(self.screen, ModalScreen):
             return
         self.run_worker(self.room_dialog(), exclusive=False, name="room")
+
+    async def action_rooms(self):
+        if not self.engine or isinstance(self.screen, ModalScreen):
+            return
+        self.run_worker(self.rooms_dialog(), exclusive=False, name="rooms")
+
+    async def rooms_dialog(self):
+        name = await self.push_screen_wait(RoomFinderScreen(self.engine))
+        self.focus_line()
+        if not name:
+            return
+        idx, msg = await self.engine.add_room(name, None, creator="")  # found on the air: not ours
+        self.write_system("*** Room: " + msg)
+        if idx is not None:
+            self.select_view(("chan", idx))
 
     async def room_dialog(self):
         inv = self.engine.pending_invite

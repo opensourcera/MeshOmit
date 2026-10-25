@@ -127,6 +127,7 @@ commands below do everything the keys do, so you rarely need to leave the line.
 | `/add`, `/add Name`, `/forget Name`, `/contacts ...` | manage the node's contact list, see "Contacts: who the node knows" |
 | `/bot`, `/op` | switch the bot on or off (`/mode` toggles) |
 | `/join` | opens the room window (section 6) |
+| `/rooms` | the room finder: hashtag rooms with traffic on the air, join one (`/find`) |
 | `/send` | opens the big send window |
 | `/dash` | opens the dashboard (section 9) |
 | `/beacon` | sends a beacon now |
@@ -292,6 +293,19 @@ Type part of a contact's name in the search box, pick the people to invite from 
 4. sends each invited person a direct message: "join me on channel #name (add it as a channel with that
    exact name)" or "join me on channel name, key 0123…".
 
+### Finding rooms: `f` or `/rooms`
+
+MeshCore has no directory of rooms: a hashtag room exists wherever someone added a channel with that
+name, and you learn of it by hearing the name. The finder helps: every group message on the air carries
+one byte of its channel key's hash and a two-byte check, and a hashtag room's key comes from its name, so
+a name can be checked against the traffic your node hears but cannot read. The dialog lists the names
+with real traffic since the program started (how many messages, when the last one was, a sample line),
+drawn from names people mentioned in chat, a list of common room names, your places, and the words seen in
+messages and node names lately. Type a name to try a guess of your own: the first row shows at once
+whether that room has traffic. Enter joins the selected room, or the typed name; a name with "none
+heard" can be joined too, you would simply be the first there. The joined room gets a window and goes
+into `config.json` like any other room.
+
 **Joining** does not announce anything on the channel. MeshCore has no join or presence message; people
 notice you when you write.
 
@@ -310,6 +324,7 @@ These work when the input line does not have the focus (press Escape first):
 | `Enter` | back to the input line |
 | `m` | switch between Bot mode (blue) and Operator mode (lilac) |
 | `j` | room window |
+| `f` | find rooms: hashtag rooms with traffic on the air (section 6) |
 | `d` | dashboard (Escape or `d` closes it) |
 | `b` | send a beacon now |
 | `t` | send "Test" to the window you are looking at (the beacon channel in the *All* window) |

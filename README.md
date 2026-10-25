@@ -28,6 +28,9 @@ firmware over Bluetooth, USB or WiFi, and the mesh turns into something you can 
 - **Reply in two key presses.** `a` prepares an answer to the last test with the station's name, hops,
   repeaters and SNR already filled in; `@` lists the people heard; `{` lists fields like `{hops}` and
   `{snr}` to drop into your own sentences; `{{` holds your saved lines.
+- **Find rooms.** MeshCore has no room directory, but the finder checks names (mentioned in chat, common
+  ones, your places, your own guesses) against the group traffic the node hears but cannot read, and
+  lists the rooms that are really in use, with a sample line. One key joins.
 - **Rooms and private chat.** Create a hashtag room or a private room with a key, invite people by
   encrypted direct message, join invitations with one key. `/whois` shows where a station is and how far.
 - **Nothing is hard-coded, nothing is hidden.** Every rule is in `config.json`, every sentence in

@@ -7,6 +7,8 @@ The engine knows nothing about the screen; it reports through a Ui object with t
     repeaters(list_of_dict)     latest repeater readings
 """
 import asyncio
+import hashlib
+import hmac
 import json
 import os
 import random
@@ -194,6 +196,8 @@ class Engine:
         self.recent_rx: deque = deque(maxlen=200)
         self.repeater_rows: dict[str, dict] = {}
         self.signal_tests: dict[str, dict] = {}  # repeater hash -> result of the last trace from the dialog
+        # group packets heard on channels the node cannot read, kept for the room finder (hash, MAC, ciphertext)
+        self.unknown_chan: deque = deque(maxlen=3000)
         self.counters = {"messages": 0, "triggers": 0, "replies": 0, "beacons": 0, "beacon_replies": 0}
         self.pin_needed = asyncio.Event()
         self.pending_cli: dict[str, list] = {}
@@ -391,10 +395,13 @@ class Engine:
             "ts": int(time.time()), "payload_type": p.get("payload_typename"), "route_type": p.get("route_typename"),
             "snr": p.get("snr"), "rssi": p.get("rssi"), "hash_size": sz, "hops": len(hops), "path": ",".join(hops),
             "last_hop": hops[-1] if hops else "", "channel_name": p.get("chan_name"),
-            "sender_ts": p.get("sender_timestamp"), "text": p.get("message"),
+            "sender_ts": p.get("sender_timestamp"), "text": p.get("message"), "chan_hash": p.get("chan_hash"),
         }
         self.recent_rx.append(rec)
         self.db.add_rx_packet(**rec)
+        if rec["payload_type"] == "GRP_TXT" and not rec["channel_name"] and p.get("crypted"):
+            self.unknown_chan.append({"ts": rec["ts"], "hash": p.get("chan_hash"), "mac": p.get("cipher_mac"),
+                                      "crypted": p.get("crypted"), "snr": rec["snr"], "hops": rec["hops"]})
 
     def best_copy(self, sender_ts, text):
         """Among the copies of one channel message heard in the last seconds, the strongest."""
@@ -785,12 +792,121 @@ class Engine:
                     return None, "node refused the channel"
                 await self.mc.commands.get_channel(idx)  # registers the key for decoding
             self.channels[idx] = name
-        self.rooms[name] = {"creator": creator or self.node_name, "secret": secret.hex() if secret else None,
+        # creator: None means we made it; "" means found on the air, nobody here knows who started it
+        self.rooms[name] = {"creator": self.node_name if creator is None else creator, "secret": secret.hex() if secret else None,
                             "ts": int(time.time())}
         self.log("Room %s on channel %d" % (name, idx), "ok")
         if self.on_channels_changed:
             self.on_channels_changed(dict(self.channels))
         return idx, "joined %s (channel %d)" % (name, idx)
+
+    # ------------------------------------------------------------------ finding rooms
+    # MeshCore has no directory of channels. A hashtag room's key is derived from its name, and every group
+    # packet on the air carries one byte of the key's hash plus a two-byte MAC, so a name can be checked
+    # against the traffic the node hears but cannot read: right name, right MAC, readable text.
+    BUILTIN_ROOMS = (
+        "general chat public test testing lounge random offtopic hello welcome help news weather alerts emergency "
+        "sos cq ham hamradio radio meshcore mesh lora sdr tech dev nerds bots bot music hiking camping outdoors "
+        "prepper preppers events local community admin repeaters repeater announcements network status "
+        "atlanta georgia ga marietta kennesaw roswell alpharetta decatur smyrna woodstock canton cartersville "
+        "cumming lawrenceville duluth athens macon savannah augusta columbus rome dalton chattanooga nashville "
+        "tennessee alabama birmingham huntsville carolina charlotte greenville florida jacksonville tampa orlando "
+        "southeast metro 404 770 678 470 i75 i85 i285 gwinnett cobb fulton dekalb cherokee paulding bartow "
+        "usa us america world europe uk canada australia"
+    ).split()
+
+    @staticmethod
+    def hashtag_secret(name: str) -> bytes:
+        return hashlib.sha256(name.encode("utf-8")).digest()[:16]
+
+    @staticmethod
+    def channel_hash(secret: bytes) -> str:
+        return hashlib.sha256(secret).hexdigest()[:2]
+
+    @staticmethod
+    def room_name(name: str) -> str:
+        name = (name or "").strip()
+        return name if not name or name.startswith("#") else "#" + name
+
+    def try_room(self, name: str) -> dict:
+        """Check one hashtag room name against the unreadable group packets heard since start: how many were
+        really on that channel (MAC verified), the newest one decrypted as a sample."""
+        name = self.room_name(name)
+        res = {"name": name, "packets": 0, "same_hash": 0, "last_ts": None, "sample": "", "found_by": ""}
+        if len(name) < 2:
+            return res
+        secret = self.hashtag_secret(name)
+        h = self.channel_hash(secret)
+        newest = None
+        for u in self.unknown_chan:
+            if u["hash"] != h or not u["mac"] or not u["crypted"]:
+                continue
+            res["same_hash"] += 1
+            msg = bytes.fromhex(u["crypted"])
+            if hmac.new(secret, msg, hashlib.sha256).digest()[:2] != bytes.fromhex(u["mac"]):
+                continue
+            res["packets"] += 1
+            if newest is None or u["ts"] >= newest["ts"]:  # the last one heard in the same second wins
+                newest = u
+        if newest:
+            res["last_ts"] = newest["ts"]
+            try:
+                from Crypto.Cipher import AES
+                clear = AES.new(secret, AES.MODE_ECB).decrypt(bytes.fromhex(newest["crypted"]))
+                res["sample"] = clear[5:].split(b"\0", 1)[0].decode("utf-8", "ignore").strip()
+            except Exception:
+                res["sample"] = ""
+        return res
+
+    def room_candidates(self) -> list[tuple[str, str]]:
+        """(name, how found) of the room names worth trying: hashtags people wrote, the built-in list, your
+        places, and every word seen in messages and in contact names during the last week."""
+        now = int(time.time())
+        seen: dict[str, str] = {}
+
+        def add(word: str, how: str):
+            w = word.strip().strip("#").strip()
+            if 2 <= len(w) <= 24 and re.fullmatch(r"[\w-]+", w):
+                for form in (w, w.lower()):
+                    seen.setdefault("#" + form, how)
+
+        texts = self.db.texts_since(now - 7 * 86400)
+        for t in texts:
+            for m in re.findall(r"(?<![\w/])#([A-Za-z][\w-]{1,24})", t or ""):
+                add(m, "mentioned in chat")
+        for place in self.cfg.get("locations", []) or []:
+            add(str(place).replace(",", " "), "your place")
+            for w in re.split(r"[^\w-]+", str(place)):
+                add(w, "your place")
+        for w in self.BUILTIN_ROOMS:
+            add(w, "common name")
+        for t in texts:
+            for w in re.findall(r"[A-Za-z][\w-]{2,23}", t or ""):
+                add(w, "word seen in chat")
+        if self.mc:
+            for c in self.mc.contacts.values():
+                for w in re.findall(r"[A-Za-z][\w-]{2,23}", c.get("adv_name") or ""):
+                    add(w, "word in a node name")
+        return list(seen.items())
+
+    def find_rooms(self) -> list[dict]:
+        """Every candidate room name with traffic heard since start (MAC verified), busiest first, plus the
+        names people mentioned in chat even without traffic; rooms already on the node left out."""
+        here = set(self.channels.values())
+        out = []
+        for name, how in self.room_candidates():
+            if name in here:
+                continue
+            r = self.try_room(name)
+            if r["packets"] or how == "mentioned in chat":
+                r["found_by"] = how
+                out.append(r)
+        out.sort(key=lambda r: (-r["packets"], r["name"].lower()))
+        return out
+
+    def unknown_summary(self) -> tuple[int, int]:
+        """(packets, distinct channel hashes) heard since start on channels the node cannot read."""
+        return len(self.unknown_chan), len({u["hash"] for u in self.unknown_chan})
 
     @staticmethod
     def invite_text(name: str, secret: bytes | None) -> str:

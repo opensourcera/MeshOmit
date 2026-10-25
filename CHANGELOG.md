@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The room finder (`f`, `/rooms`): hashtag rooms with real traffic on the air, found by checking names
+  (mentioned in chat, common names, your places, words seen lately, your own typed guess) against the
+  group packets the node hears but cannot read; messages, last heard, a sample line; Enter joins.
 - The repeater dialog: a click on the *Repeaters* panel (or `/repeaters`) lists your repeaters and every
   repeater that carried packets to you in the last day, with packets, SNR, age, hops and distance, the
   one heard best marked *closest*. Enter polls one of yours or sends a signal test (a trace, no password

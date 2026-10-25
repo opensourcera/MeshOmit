@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
-from textual.widgets import Input, Label, OptionList, RichLog  # noqa: E402
+from textual.widgets import DataTable, Input, Label, OptionList, RichLog  # noqa: E402
 
 from fake_node import ALICE_KEY, BOB_KEY, channel_msg, dm, make_config, start  # noqa: E402
 from meshomit.app import ALL, MeshOmitApp, RoomScreen, SendScreen, load_config  # noqa: E402
@@ -527,5 +527,61 @@ def test_repeater_dialog_checks_password_before_saving():
             assert load_config(cfg_path)["repeaters"] == []
             await pilot.press("escape")
             await pilot.pause(0.3)
+            eng.stop()
+    run(body)
+
+
+def test_room_finder_matches_traffic_and_joins():
+    import hashlib
+    import hmac
+    import time
+    from Crypto.Cipher import AES
+    from fake_node import event
+    from meshomit.app import RoomFinderScreen
+
+    def packet(room: str, text: str):
+        """A group packet the way MeshCore builds it, as the raw log reports it (no channel known)."""
+        secret = hashlib.sha256(room.encode()).digest()[:16]
+        clear = int(time.time()).to_bytes(4, "little") + bytes([0]) + text.encode()
+        clear += bytes(-len(clear) % 16)
+        enc = AES.new(secret, AES.MODE_ECB).encrypt(clear)
+        mac = hmac.new(secret, enc, hashlib.sha256).digest()[:2]
+        return event({"payload_typename": "GRP_TXT", "route_typename": "FLOOD",
+                      "chan_hash": hashlib.sha256(secret).hexdigest()[:2], "cipher_mac": mac.hex(),
+                      "crypted": enc.hex(), "path": "ab", "path_hash_size": 1, "snr": 4.0})
+
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            eng.on_rx_log(packet("#georgia", "Alice: hi there"))
+            eng.on_rx_log(packet("#georgia", "Bob: evening"))
+            eng.on_rx_log(packet("#zzqx-private", "Carol: nobody guesses this"))
+            eng.on_channel_msg(channel_msg(0, "Zed", "come to #hikers tonight"))
+            await pilot.pause(0.3)
+            assert eng.unknown_summary() == (3, 2)
+            r = eng.try_room("georgia")
+            assert r["name"] == "#georgia" and r["packets"] == 2 and r["sample"] == "Bob: evening", r
+            await pilot.press("escape", "f")
+            await pilot.pause(0.6)
+            assert isinstance(app.screen, RoomFinderScreen), type(app.screen).__name__
+            names = [r["name"] for r in app.screen.rows]
+            assert names[0] == "#georgia" and "#hikers" in names, names
+            hikers = next(r for r in app.screen.rows if r["name"] == "#hikers")
+            assert hikers["packets"] == 0 and hikers["found_by"] == "mentioned in chat"
+            await pilot.press(*"zzqx")  # a guess typed in the box
+            await pilot.pause(0.4)
+            assert app.screen.rows[0]["name"] == "#zzqx" and app.screen.rows[0]["packets"] == 0
+            inp = app.screen.query_one("#find_name", Input)
+            inp.value = ""
+            await pilot.pause(0.3)
+            app.screen.query_one("#find_table", DataTable).focus()
+            await pilot.press("enter")  # the top row: #georgia
+            await pilot.pause(0.8)
+            assert not isinstance(app.screen, RoomFinderScreen)
+            assert any(s[0] == "set_channel" and s[2] == "#georgia" for s in eng.mc.sent), eng.mc.sent
+            entry = next((n for n in window_names(app) if "#georgia" in n), "")
+            assert "#georgia" in eng.channels.values() and entry and "*" not in entry, window_names(app)
             eng.stop()
     run(body)

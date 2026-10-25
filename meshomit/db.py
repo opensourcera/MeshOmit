@@ -109,6 +109,10 @@ class Db:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        # columns added after 1.0: an older database gets them here
+        have = {d[1] for d in self.conn.execute("PRAGMA table_info(rx_packets)")}
+        if "chan_hash" not in have:
+            self.conn.execute("ALTER TABLE rx_packets ADD COLUMN chan_hash TEXT")  # 1-byte channel hash of group packets
         self.conn.commit()
 
     def close(self):
@@ -181,6 +185,17 @@ class Db:
         rows = self.conn.execute(
             "SELECT last_hop, COUNT(*) FROM rx_packets WHERE ts >= ? GROUP BY last_hop", (since_ts,)).fetchall()
         return {h: n for h, n in rows}
+
+    def unknown_channel_counts(self, since_ts: int) -> list:
+        """(channel hash, packets, newest ts) of the group packets since since_ts that no channel could read."""
+        return self.conn.execute(
+            "SELECT chan_hash, COUNT(*), MAX(ts) FROM rx_packets WHERE ts >= ? AND payload_type = 'GRP_TXT' "
+            "AND channel_name IS NULL AND chan_hash IS NOT NULL GROUP BY chan_hash", (since_ts,)).fetchall()
+
+    def texts_since(self, since_ts: int) -> list:
+        """The text of every message stored since since_ts."""
+        return [r[0] for r in self.conn.execute(
+            "SELECT text FROM messages WHERE ts >= ? AND text IS NOT NULL", (since_ts,))]
 
     def last_hop_stats(self, since_ts: int) -> list:
         """(last-hop hash, packets, best SNR, newest ts) per relaying repeater since since_ts; direct packets left out."""

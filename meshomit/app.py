@@ -966,8 +966,7 @@ class RepeaterScreen(ModalScreen[None]):
                     rep["name"], (rep_now.get("bat_mv") or 0) / 1000, (rep_now.get("uptime_s") or 0) / 3600,
                     rep_now.get("noise_floor"), rep_now.get("trace_there"), rep_now.get("trace_back")))
             else:
-                self.msg("%s: %s. Is the password right, and is the repeater in range?" % (
-                    rep["name"], rep_now.get("note") or "no answer"))
+                self.msg("%s: %s" % (rep["name"], rep_now.get("note") or "no answer"))
         except Exception as e:
             self.msg("Poll failed: %s" % e)
         finally:

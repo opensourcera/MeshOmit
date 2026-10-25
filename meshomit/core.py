@@ -1266,14 +1266,22 @@ class Engine:
         # 2. login + status, each tried twice: a busy repeater drops the odd packet
         pw = read_password(self.contacts_path(rep["password_file"]), rep.get("password_key"))
         ev = None
-        for attempt in range(2):
+        # the node routes the login through its own contact entry for the repeater: without one it refuses
+        known = (not self.contacts_loaded) or any(k.lower().startswith(key[:8].lower()) for k in mc.contacts)
+        if not known:
+            row["note"] = "not in this node's contact list: /add %s when its advert arrives" % name
+        for attempt in range(2 if known else 0):
             async with self.cmd_lock:
-                await mc.commands.send_login(key, pw)
+                sent = await mc.commands.send_login(key, pw)
+            if sent is not None and sent.type == EventType.ERROR:
+                p = sent.payload if isinstance(sent.payload, dict) else {"error": sent.payload}
+                row["note"] = "node refused the login: %s" % (p.get("reason") or p.get("error") or p)
+                break
             ev = await mc.wait_for_event(EventType.LOGIN_SUCCESS, timeout=15)
             if ev:
                 break
         if not ev:
-            row["note"] = "no login answer (2 tries)"
+            row["note"] = row["note"] or "no login answer (2 tries): wrong password, or it did not hear us"
         else:
             st = None
             for attempt in range(2):

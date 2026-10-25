@@ -34,6 +34,8 @@ class FakeMC:
         self.node_channels = {0: "Public", 1: "#test"}
         self.pending_contacts: dict = {}
         self.manual = False
+        self.password = "secret"        # the admin password every fake repeater accepts
+        self.login_ok = False
         fake = self
 
         class Cmds:
@@ -70,6 +72,23 @@ class FakeMC:
                 fake.sent.append(("remove_contact", key))
                 return _Result()
 
+            async def send_login(self, key, pw):
+                fake.sent.append(("send_login", key))
+                fake.login_ok = pw == fake.password
+                return _Result()
+
+            async def send_statusreq(self, key):
+                fake.sent.append(("statusreq", key))
+                return _Result()
+
+            async def send_trace(self, path=None, flags=None):
+                fake.sent.append(("trace", path))
+                return _Result()
+
+            async def send_cmd(self, key, cmd):
+                fake.sent.append(("cmd", key, cmd))
+                return _Result()
+
             async def set_manual_add_contacts(self, on):
                 fake.manual = on
                 r = _Result()
@@ -77,6 +96,19 @@ class FakeMC:
                 return r
 
         self.commands = Cmds()
+
+    async def wait_for_event(self, ev_type, timeout=None):
+        """LOGIN_SUCCESS after a login with the right password; nothing else ever arrives."""
+        await asyncio.sleep(0.05)
+        if getattr(ev_type, "name", "") == "LOGIN_SUCCESS" and self.login_ok:
+            return event({"ok": True})
+        return None
+
+    def subscribe(self, ev_type, cb):
+        return object()
+
+    def unsubscribe(self, sub):
+        pass
 
     def pop_pending_contact(self, key):
         return self.pending_contacts.pop(key, None)

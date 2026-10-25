@@ -485,3 +485,47 @@ def test_at_opens_people_list():
             assert not isinstance(app.screen, PeopleScreen)
             eng.stop()
     run(body)
+
+
+def test_repeater_dialog_checks_password_before_saving():
+    from meshomit.app import RepeaterPasswordScreen, RepeaterScreen
+
+    async def body(tmp):
+        cfg_path = make_config(tmp)
+        app = MeshOmitApp(load_config(cfg_path), cfg_path)
+        async with app.run_test(size=SIZE) as pilot:
+            eng = await start(app, pilot)
+            await pilot.click("#repeaters")  # the panel opens the dialog
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, RepeaterScreen), type(app.screen).__name__
+            assert [c["name"] for c in app.screen.cands] == ["Bob Heltec"]  # the one repeater among the contacts
+            await pilot.press("m")
+            await pilot.pause(0.4)
+            assert isinstance(app.screen, RepeaterPasswordScreen), type(app.screen).__name__
+            app.screen.query_one("#pw_name", Input).value = "Bob"
+            app.screen.query_one("#pw_pass", Input).value = "wrong"
+            await pilot.press("enter")
+            await pilot.pause(1.0)
+            assert isinstance(app.screen, RepeaterScreen)
+            assert eng.cfg["repeaters"] == [] and not os.path.exists(os.path.join(tmp, "passwords"))
+            assert "did not accept" in str(app.screen.query_one("#rep_msg", Label).render())
+            await pilot.press("m")
+            await pilot.pause(0.4)
+            app.screen.query_one("#pw_name", Input).value = "Bob"
+            app.screen.query_one("#pw_pass", Input).value = "secret"
+            await pilot.press("enter")
+            await pilot.pause(1.0)
+            assert [r["name"] for r in eng.cfg["repeaters"]] == ["Bob"]
+            on_disk = load_config(cfg_path)["repeaters"][0]
+            assert on_disk["pubkey"] == BOB_KEY and on_disk["password_file"] == "passwords/%s.txt" % BOB_KEY[:8]
+            with open(os.path.join(tmp, on_disk["password_file"]), encoding="utf-8") as f:
+                assert f.read().strip() == "secret"
+            shown = str(app.screen.query_one("#rep_msg", Label).render())
+            assert app.screen.cands[0]["mine"] and ("yours now" in shown or "Polling Bob" in shown), shown
+            await pilot.press("f")
+            await pilot.pause(0.3)
+            assert load_config(cfg_path)["repeaters"] == []
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            eng.stop()
+    run(body)

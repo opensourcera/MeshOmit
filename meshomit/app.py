@@ -16,6 +16,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (Button, DataTable, Footer, Header, Input, Label, OptionList, RadioButton, RadioSet,
                              RichLog, Select, Sparkline, Static)
@@ -845,7 +846,10 @@ class RepeaterScreen(ModalScreen[None]):
             self.msg("The node's contact list is not loaded yet: repeaters that sent no packet lately are missing.")
 
     def msg(self, text: str) -> None:
-        self.query_one("#rep_msg", Label).update(text)
+        try:
+            self.query_one("#rep_msg", Label).update(text)
+        except NoMatches:  # the dialog was closed while a poll or test was still running
+            pass
 
     @staticmethod
     def snr_style(snr) -> str:
@@ -883,7 +887,10 @@ class RepeaterScreen(ModalScreen[None]):
 
     def fill(self) -> None:
         """Redraw the table from the engine's candidates, keeping the cursor where it was."""
-        t = self.query_one("#rep_table", DataTable)
+        try:
+            t = self.query_one("#rep_table", DataTable)
+        except NoMatches:  # closed meanwhile: a worker's final redraw has nowhere to go
+            return
         row = t.cursor_row
         t.clear()
         self.cands = self.engine.repeater_candidates()

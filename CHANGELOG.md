@@ -10,9 +10,10 @@
   it is polled right away; `f` forgets one. `/repeaters report` is the old text report.
 - `password_file` in `config.json` may be relative to `config.json`.
 - The Repeaters panel says how to get started when no repeater is configured.
-- A failed repeater poll says why: the node refused the login command (usually because the repeater is
-  not in its contact list, which the node needs to route the login), or nothing came back (wrong
-  password, or the repeater did not hear us).
+- A repeater that the node has no contact for (its advert never heard, the usual case on a node you just
+  switched to) is added to the node's contact list from the name and key in `config.json` before the
+  login, since the node routes a login through that entry. A failed poll says why: the node refused the
+  command, or nothing came back (wrong password, or the repeater did not hear us).
 
 ## 1.0.2 beta (2026-10-24)
 

@@ -204,6 +204,8 @@ class SetupScreen(ModalScreen[dict]):
                 yield Label("Where you are, a few names separated by commas (the bot uses one at random):", classes="h")
                 yield Input(placeholder="Springfield, Downtown, Riverside", id="locations")
                 yield Label("Your node's name (leave empty to take it from the node):", classes="h")
+                yield Label("Your own repeaters come later: once connected, click the Repeaters panel, pick them "
+                            "from the list and give their admin password.", classes="h")
                 yield Input(placeholder="", id="node_name")
             with Vertical(id="setup_foot"):  # always visible under the scrolling part
                 yield Label("", id="setup_msg")
@@ -756,17 +758,20 @@ class RepeaterPasswordScreen(ModalScreen[tuple]):
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, again: bool = False):
         super().__init__()
         self.name = name
+        self.again = again  # already ours: a new password replaces the saved one
 
     def compose(self) -> ComposeResult:
         with Vertical(id="pw_box"):
-            yield Label("Make %s one of your repeaters" % self.name, classes="h")
+            yield Label("New password for %s (it replaces the saved one)" % self.name if self.again
+                        else "Make %s one of your repeaters" % self.name, classes="h")
             yield Label("Short name on screen (five letters fit the panel):")
             yield Input(value=self.name[:12], id="pw_name")
-            yield Label("Its admin password, the one set in the MeshCore app. It is written to a file in the "
-                        "passwords folder next to config.json, never into config.json itself.")
+            yield Label("Its admin password, the one set in the MeshCore app's repeater settings. The repeater is "
+                        "asked to accept it first; only then is it written to a file in the passwords folder next "
+                        "to config.json, never into config.json itself.")
             yield Input(password=True, placeholder="admin password", id="pw_pass")
             yield Label("", id="pw_msg")
             with Horizontal():
@@ -815,10 +820,12 @@ class RepeaterScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="rep_box"):
             yield Label("Repeaters: yours (mine) and the ones that carried packets to you in the last day", classes="h")
-            yield Label("Enter polls one of yours (battery, status, neighbours) or sends a signal test to any other: "
-                        "a trace that tells how well it hears you and you hear it. The row marked \"closest\" is the "
-                        "one heard best, the natural one to test against. m makes the selected repeater yours (asks "
-                        "for its admin password), f forgets one of yours, t is a signal test, Escape closes.")
+            yield Label("\"Mine\" is a repeater you own: you know its admin password. Any other repeater can only be "
+                        "signal-tested. Enter polls one of yours (battery, status, neighbours) or sends a signal test "
+                        "to any other: a trace that tells how well it hears you and you hear it. The row marked "
+                        "\"closest\" is the one heard best, the natural one to test against. m makes the selected "
+                        "repeater yours, or gives one of yours a new password: it is checked with the repeater "
+                        "before anything is saved. f forgets one of yours, t is a signal test, Escape closes.")
             t = DataTable(id="rep_table", cursor_type="row", zebra_stripes=True)
             t.add_columns("", "Repeater", "Hash", "Pkts 24h", "SNR", "Heard", "Hops", "Dist", "Last result")
             yield t
@@ -901,8 +908,9 @@ class RepeaterScreen(ModalScreen[None]):
         if self.cands:
             t.move_cursor(row=min(row if row is not None and row >= 0 else 0, len(self.cands) - 1))
         else:
-            self.msg("No repeater heard yet and none in the node's contact list. Leave the program listening "
-                     "for a while and open this again.")
+            self.msg("Nothing heard yet and the node's contact list is empty or still loading. Leave the program "
+                     "listening a few minutes, or make your repeater send an advert from its console, and open "
+                     "this again.")
 
     def selected(self) -> dict | None:
         t = self.query_one("#rep_table", DataTable)
@@ -966,7 +974,8 @@ class RepeaterScreen(ModalScreen[None]):
                     rep["name"], (rep_now.get("bat_mv") or 0) / 1000, (rep_now.get("uptime_s") or 0) / 3600,
                     rep_now.get("noise_floor"), rep_now.get("trace_there"), rep_now.get("trace_back")))
             else:
-                self.msg("%s: %s" % (rep["name"], rep_now.get("note") or "no answer"))
+                self.msg("%s: %s. If the password changed, press m to give the new one (checked before it is "
+                         "saved); f forgets the repeater." % (rep["name"], rep_now.get("note") or "no answer"))
         except Exception as e:
             self.msg("Poll failed: %s" % e)
         finally:
@@ -1001,28 +1010,44 @@ class RepeaterScreen(ModalScreen[None]):
         c = self.selected()
         if not c:
             return
-        if c["mine"]:
-            self.msg("%s is already one of yours." % c["name"])
-            return
         if not c["key"]:
             self.msg("The node has no contact for this hash, so its full key is unknown. When its advert arrives, "
                      "/add it, then come back here.")
             return
-        self.app.push_screen(RepeaterPasswordScreen(c["name"]), callback=lambda r: self.make_mine(c, r))
+        self.app.push_screen(RepeaterPasswordScreen(c["name"], again=c["mine"]), callback=lambda r: self.make_mine(c, r))
 
     def make_mine(self, c: dict, r) -> None:
         if not r:
             return
         name, pw = r
+        if not self.ready():
+            return
+        self.run_worker(self.check_and_save(c, name, pw), exclusive=True, group="rep")
+
+    async def check_and_save(self, c: dict, name: str, pw: str) -> None:
+        """Log in to the repeater with the given password; save it as ours only when the repeater accepts it."""
+        self.busy = True
+        self.msg("Checking the password with %s (up to 30 seconds)..." % name)
+        try:
+            ok, why = await self.engine.login({"name": name, "pubkey": c["key"]}, pw)
+        except Exception as e:
+            ok, why = False, str(e)
+        finally:
+            self.busy = False
+        if not ok:
+            self.msg("%s did not accept it: %s. Nothing saved. Check the password in the MeshCore app's repeater "
+                     "settings, and t for a signal test if it may be out of reach; then press m again." % (name, why))
+            self.fill()
+            return
         try:
             entry = self.engine.add_own_repeater(name, c["key"], pw)
         except OSError as e:
-            self.msg("Could not save the password file: %s" % e)
+            self.msg("The password is right, but the file could not be written: %s" % e)
             return
-        self.msg("%s is yours now; the password is in %s. Polling it..." % (name, entry["password_file"]))
+        self.msg("%s accepted the password and is yours now (saved in %s). Polling it..."
+                 % (name, entry["password_file"]))
         self.fill()
-        if self.engine.mc:
-            self.run_worker(self.poll(entry), exclusive=True, group="rep")
+        self.run_worker(self.poll(entry), exclusive=True, group="rep")
 
     def action_forget(self) -> None:
         c = self.selected()
@@ -1310,6 +1335,10 @@ class MeshOmitApp(App):
         self.write_system("*** Keys when the box is not focused (press Escape): 1-9 window, a answer the last test "
                           "with hops and SNR, m mode, j room, d dashboard, b beacon, t test, r poll, q quit. "
                           "Click a nick or a <name> for a private window.")
+        if not self.engine.cfg.get("repeaters"):
+            self.write_system("*** Own a repeater? Click the Repeaters panel (or type /repeaters) once connected: "
+                              "pick it from the list, press m and give its admin password. It is checked with the "
+                              "repeater, then watched every half hour: battery, noise, trace, neighbours.")
         self.update_sendbar()
         self.query_one("#send_line", Input).focus()
         self.write_system("*** Texts come from %s" % os.path.basename(self.engine.msgs.get("_path", "messages.json")))

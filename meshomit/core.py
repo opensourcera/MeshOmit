@@ -1082,6 +1082,28 @@ class Engine:
         self.log("Beacon %s: %s" % ("sent" if ok else "FAILED", text), "ok" if ok else "warn")
 
     # ------------------------------------------------------------------ repeaters
+    async def login(self, rep: dict, pw: str) -> tuple[bool, str]:
+        """Log in to a repeater as admin: (True, "") when it accepted the password, else (False, why).
+        rep needs "name" and "pubkey". Two tries, plus one more after adding the node's contact entry."""
+        mc = self.mc
+        key = rep["pubkey"]
+        for attempt in range(3):
+            async with self.cmd_lock:
+                sent = await mc.commands.send_login(key, pw)
+            if sent is not None and sent.type == EventType.ERROR:
+                p = sent.payload if isinstance(sent.payload, dict) else {"error": sent.payload}
+                if p.get("error_code") == 2 and attempt == 0:
+                    # ERR_CODE_NOT_FOUND: the node routes a login through its own contact entry for the repeater
+                    # and has none (no advert heard yet). Make one from the key in config.json and try again.
+                    note = await self.ensure_repeater_contact(rep)
+                    if note:
+                        return False, note
+                    continue
+                return False, "node refused the login (%s)" % (p.get("code_string") or p.get("reason") or p)
+            if await mc.wait_for_event(EventType.LOGIN_SUCCESS, timeout=15):
+                return True, ""
+        return False, "no login answer (2 tries): wrong password, or it did not hear us"
+
     async def ensure_repeater_contact(self, rep: dict) -> str:
         """Put one of our repeaters into the node's contact list from its key alone (flood path, no position),
         so the node can route a login to it before its advert has been heard. Returns a note on failure."""
@@ -1279,27 +1301,9 @@ class Engine:
             row["trace_there"], row["trace_back"] = tr
         # 2. login + status, each tried twice: a busy repeater drops the odd packet
         pw = read_password(self.contacts_path(rep["password_file"]), rep.get("password_key"))
-        ev = None
-        for attempt in range(3):
-            async with self.cmd_lock:
-                sent = await mc.commands.send_login(key, pw)
-            if sent is not None and sent.type == EventType.ERROR:
-                p = sent.payload if isinstance(sent.payload, dict) else {"error": sent.payload}
-                if p.get("error_code") == 2 and attempt == 0:
-                    # ERR_CODE_NOT_FOUND: the node routes a login through its own contact entry for the repeater
-                    # and has none (no advert heard yet). Make one from the key in config.json and try again.
-                    note = await self.ensure_repeater_contact(rep)
-                    if note:
-                        row["note"] = note
-                        break
-                    continue
-                row["note"] = "node refused the login (%s)" % (p.get("code_string") or p.get("reason") or p)
-                break
-            ev = await mc.wait_for_event(EventType.LOGIN_SUCCESS, timeout=15)
-            if ev:
-                break
+        ev, row["note"] = await self.login(rep, pw)
         if not ev:
-            row["note"] = row["note"] or "no login answer (2 tries): wrong password, or it did not hear us"
+            pass
         else:
             st = None
             for attempt in range(2):

@@ -7,7 +7,11 @@
   one heard best marked *closest*. Enter polls one of yours or sends a signal test (a trace, no password
   needed) to any other and reports how well it hears you and you hear it. `m` makes a repeater yours:
   the admin password goes to `passwords/<key>.txt` next to `config.json`, the entry to `config.json`, and
-  it is polled right away; `f` forgets one. `/repeaters report` is the old text report.
+  it is polled right away; `f` forgets one. `/repeaters report` is the old text report. The password is
+  checked with the repeater first and saved only when accepted, so a wrong guess costs nothing; `m` on
+  a repeater that is already yours replaces its password the same way.
+- Pointers for a first-time user: the setup form, the start-up lines in the feed, the empty Repeaters
+  panel and the dialog all say how to make a repeater yours and what "mine" means.
 - `password_file` in `config.json` may be relative to `config.json`.
 - The Repeaters panel says how to get started when no repeater is configured.
 - A repeater that the node has no contact for (its advert never heard, the usual case on a node you just

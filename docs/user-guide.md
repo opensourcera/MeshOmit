@@ -385,7 +385,7 @@ row marked *closest* is the one heard best: the natural one to test your signal 
 |---|---|
 | `Enter` (or a click on the row) | one of yours: poll it now (trace, login, status, neighbours; up to a minute). Any other: a signal test |
 | `t` | a signal test for the selected repeater: a trace through it, which needs no password. The answer tells how well the repeater hears you and how well you hear it, in dB, with a word for each ("solid", "fine", "weak but usable", "at the edge") |
-| `m` | make the selected repeater one of yours. A small form asks for a short name and its admin password. The password is written to `passwords/<key prefix>.txt` next to `config.json` and the repeater to the `repeaters` list of `config.json`; it is polled at once and then every half hour |
+| `m` | make the selected repeater one of yours ("mine": you own it and know its admin password). A small form asks for a short name and the password; the program logs in to the repeater with it first, and saves nothing unless the repeater accepts it. Then the password goes to `passwords/<key prefix>.txt` next to `config.json`, the repeater to the `repeaters` list of `config.json`, and it is polled at once and every half hour after. On a repeater that is already yours, `m` asks for a new password, checks it the same way and replaces the saved one; a wrong saved password shows up as "no login answer" on every poll |
 | `f` | forget one of yours: it is taken off the list in `config.json` (the password file stays) |
 | `Escape` | close |
 

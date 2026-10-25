@@ -760,15 +760,15 @@ class RepeaterPasswordScreen(ModalScreen[tuple]):
 
     def __init__(self, name: str, again: bool = False):
         super().__init__()
-        self.name = name
+        self.rep_name = name
         self.again = again  # already ours: a new password replaces the saved one
 
     def compose(self) -> ComposeResult:
         with Vertical(id="pw_box"):
-            yield Label("New password for %s (it replaces the saved one)" % self.name if self.again
-                        else "Make %s one of your repeaters" % self.name, classes="h")
+            yield Label("New password for %s (it replaces the saved one)" % self.rep_name if self.again
+                        else "Make %s one of your repeaters" % self.rep_name, classes="h")
             yield Label("Short name on screen (five letters fit the panel):")
-            yield Input(value=self.name[:12], id="pw_name")
+            yield Input(value=self.rep_name[:12], id="pw_name")
             yield Label("Its admin password, the one set in the MeshCore app's repeater settings. The repeater is "
                         "asked to accept it first; only then is it written to a file in the passwords folder next "
                         "to config.json, never into config.json itself.")

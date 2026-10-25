@@ -50,9 +50,16 @@ keys only highlights. Press Enter on the entry, click it, or press its number.
 **Serial: "could not open port".** Another program holds the port (a serial monitor, the MeshCore web
 client, a flasher). Close it. On Linux add your user to the `dialout` group.
 
+**The repeater says "not in this node's contact list".** The node sends a login through its own contact
+entry for the repeater, so a node that never received the repeater's advert cannot log in, even though
+the trace works (a trace needs only the hash). Wait for the advert (repeaters send one every few hours;
+most can be told to send one now from their console) and `/add` it, or leave contacts in automatic mode
+so the node keeps it by itself. A node you just switched to is the usual case.
+
 **The repeater says "no login answer".** The password file is wrong, the node's clock was off (the program
 sets it when more than 30 s off; wait for the next poll), or the repeater is out of reach right now. The
-trace SNR in the same row tells you whether it heard the trace.
+trace SNR in the same row tells you whether it heard the trace. "Node refused the login" names the
+node's own error.
 
 **`config.json` was written with a BOM or odd encoding.** Both files are read as UTF-8 with an optional
 byte-order mark; any editor's default works.
